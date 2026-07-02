@@ -33,7 +33,10 @@ export function useIdTokenClaims(): IdTokenClaims | undefined {
   const [claims, setClaims] = useState<IdTokenClaims | undefined>(undefined);
 
   useEffect(() => {
-    if (!isSignedIn) return;
+    if (!isSignedIn) {
+      setClaims(undefined);
+      return;
+    }
     let cancelled = false;
     void (async () => {
       try {

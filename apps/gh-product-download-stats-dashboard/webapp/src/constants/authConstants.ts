@@ -19,6 +19,8 @@ export const AUTH_SCOPES = ["openid", "email", "groups", "profile"] as const;
 
 // Idle-timeout / session-warning configuration.
 // After IDLE_TIMEOUT_MS of inactivity the "Are you still there?" dialog is shown.
-// There is no auto-logout — the session stays alive until the user acts.
+// If the user hasn't clicked Continue within IDLE_WARNING_GRACE_MS of that, the
+// session is force-logged-out so an unattended session can't be resumed forever.
 export const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+export const IDLE_WARNING_GRACE_MS = 5 * 60 * 1000;
 export const IDLE_THROTTLE_MS = 500;

@@ -81,8 +81,16 @@ export default function TopProductsTable({
               <TableRow
                 key={p.repoId}
                 hover
+                role="button"
+                tabIndex={0}
                 sx={{ cursor: "pointer" }}
                 onClick={() => navigate(`/downloads?repos=${p.repoId}`)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate(`/downloads?repos=${p.repoId}`);
+                  }
+                }}
               >
                 <TableCell>{p.productName || p.repoName}</TableCell>
                 <TableCell align="right">

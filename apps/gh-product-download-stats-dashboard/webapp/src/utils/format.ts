@@ -45,6 +45,8 @@ export function formatBytes(bytes: number | null | undefined): string {
 }
 
 // Formats a YYYY-MM-DD or RFC3339 date as a short readable date (e.g. "25 Jun 2026").
+// Date-only strings parse as UTC midnight, so rendering must stay in UTC too —
+// otherwise viewers behind UTC would see the previous calendar day.
 export function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
@@ -53,10 +55,12 @@ export function formatDate(value: string | null | undefined): string {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    timeZone: "UTC",
   });
 }
 
-// Formats an RFC3339 timestamp as a readable date-time.
+// Formats an RFC3339 timestamp as a readable date-time, intentionally in the
+// viewer's local time zone (these are real instants, e.g. sync job run times).
 export function formatDateTime(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);

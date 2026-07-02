@@ -245,20 +245,25 @@ export default function DownloadsPage(): JSX.Element {
                             type={
                               filters.interval === "month" ? "month" : "date"
                             }
+                            aria-hidden="true"
+                            tabIndex={-1}
                             value={dateSearch}
                             onChange={(e) => setDateSearch(e.target.value)}
                             style={{
                               position: "absolute",
                               inset: 0,
                               opacity: 0,
+                              pointerEvents: "none",
                               width: "100%",
                               height: "100%",
                             }}
                           />
                           <IconButton
                             size="small"
-                            tabIndex={-1}
-                            sx={{ pointerEvents: "none" }}
+                            aria-label={
+                              dateLabel ? "Change date filter" : "Filter by date"
+                            }
+                            onClick={() => dateInputRef.current?.showPicker()}
                           >
                             <CalendarDays size={15} />
                           </IconButton>

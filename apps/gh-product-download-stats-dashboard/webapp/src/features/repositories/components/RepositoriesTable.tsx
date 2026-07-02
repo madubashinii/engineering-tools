@@ -35,6 +35,7 @@ import {
   DialogActions,
   Button,
   Typography,
+  Alert,
 } from "@wso2/oxygen-ui";
 import { Pencil } from "@wso2/oxygen-ui-icons-react";
 import { type JSX, useState } from "react";
@@ -86,19 +87,23 @@ export default function RepositoriesTable({
     const snapshot = confirm;
     setConfirming(true);
 
-    // Show spinner for 1s first, then fire the mutation and close on settle.
+    // Show spinner for 1s first, then fire the mutation. Close only on success;
+    // on error, keep the dialog open with the failure visible so the admin can retry.
     setTimeout(() => {
-      const onSettled = () => {
+      const onSuccess = () => {
         setConfirm(null);
         setConfirming(false);
       };
+      const onError = () => setConfirming(false);
       if (snapshot.nextActive) {
-        update.mutate({ id: snapshot.repo.id, update: { isActive: true } }, { onSettled });
+        update.mutate({ id: snapshot.repo.id, update: { isActive: true } }, { onSuccess, onError });
       } else {
-        deactivate.mutate(snapshot.repo.id, { onSettled });
+        deactivate.mutate(snapshot.repo.id, { onSuccess, onError });
       }
     }, MIN_LOADING_MS);
   };
+
+  const toggleError = update.error || deactivate.error;
 
   if (isLoading) {
     return (
@@ -226,11 +231,20 @@ export default function RepositoriesTable({
           {confirm?.nextActive ? "Activate repository?" : "Deactivate repository?"}
         </DialogTitle>
         <DialogContent>
-          <Typography color="text.secondary">
-            {confirm?.nextActive
-              ? `Activate "${confirmRepoLabel}"? It will start appearing in charts, stats, and tables.`
-              : `Deactivate "${confirmRepoLabel}"? It will be hidden from all charts, stats, and tables.`}
-          </Typography>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {toggleError && (
+              <Alert severity="error">
+                {confirm?.nextActive
+                  ? "Failed to activate the repository."
+                  : "Failed to deactivate the repository."}
+              </Alert>
+            )}
+            <Typography color="text.secondary">
+              {confirm?.nextActive
+                ? `Activate "${confirmRepoLabel}"? It will start appearing in charts, stats, and tables.`
+                : `Deactivate "${confirmRepoLabel}"? It will be hidden from all charts, stats, and tables.`}
+            </Typography>
+          </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button

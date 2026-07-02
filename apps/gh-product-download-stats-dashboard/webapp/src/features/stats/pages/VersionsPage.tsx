@@ -357,10 +357,18 @@ export default function VersionsPage(): JSX.Element {
                       key={r.tag}
                       hover
                       selected={version === r.tag}
+                      role="button"
+                      tabIndex={0}
                       sx={{ cursor: "pointer" }}
                       onClick={() =>
                         setVersion(version === r.tag ? null : r.tag)
                       }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setVersion(version === r.tag ? null : r.tag);
+                        }
+                      }}
                     >
                       <TableCell>{r.name}</TableCell>
                       <TableCell>

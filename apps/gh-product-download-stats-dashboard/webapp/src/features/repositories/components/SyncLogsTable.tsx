@@ -137,21 +137,27 @@ export default function SyncLogsTable(): JSX.Element {
                         <input
                           ref={startedInputRef}
                           type="date"
+                          aria-hidden="true"
+                          tabIndex={-1}
                           value={startedFilter}
                           onChange={(e) => setStartedFilter(e.target.value)}
                           style={{
                             position: "absolute",
                             inset: 0,
                             opacity: 0,
-                            cursor: "pointer",
+                            pointerEvents: "none",
                             width: "100%",
                             height: "100%",
                           }}
                         />
                         <IconButton
                           size="small"
-                          tabIndex={-1}
-                          sx={{ pointerEvents: "none" }}
+                          aria-label={
+                            startedFilter
+                              ? "Change started date filter"
+                              : "Filter by started date"
+                          }
+                          onClick={() => startedInputRef.current?.showPicker()}
                         >
                           <CalendarDays size={14} />
                         </IconButton>
@@ -183,21 +189,27 @@ export default function SyncLogsTable(): JSX.Element {
                         <input
                           ref={completedInputRef}
                           type="date"
+                          aria-hidden="true"
+                          tabIndex={-1}
                           value={completedFilter}
                           onChange={(e) => setCompletedFilter(e.target.value)}
                           style={{
                             position: "absolute",
                             inset: 0,
                             opacity: 0,
-                            cursor: "pointer",
+                            pointerEvents: "none",
                             width: "100%",
                             height: "100%",
                           }}
                         />
                         <IconButton
                           size="small"
-                          tabIndex={-1}
-                          sx={{ pointerEvents: "none" }}
+                          aria-label={
+                            completedFilter
+                              ? "Change completed date filter"
+                              : "Filter by completed date"
+                          }
+                          onClick={() => completedInputRef.current?.showPicker()}
                         >
                           <CalendarDays size={14} />
                         </IconButton>

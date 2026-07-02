@@ -127,9 +127,11 @@ function getSeriesValue(
   return pts.length > 0 ? (pts[pts.length - 1]?.value ?? 0) : 0;
 }
 
-function defaultDateForMode(mode: TableMode): string {
-  if (mode === "day") return new Date().toISOString().slice(0, 10);
-  if (mode === "month") return new Date().toISOString().slice(0, 7);
+// Anchors the mode-based table date to the selected range's end (filters.to)
+// rather than today, so Daily/Monthly views default inside the selected range.
+function defaultDateForMode(mode: TableMode, to: string): string {
+  if (mode === "day") return to;
+  if (mode === "month") return to.slice(0, 7);
   return "";
 }
 
@@ -138,7 +140,10 @@ export default function RepositoryStatsPage(): JSX.Element {
   const filters = parseFilters(params);
   const { data: reposData } = useGetRepositories();
 
-  const stat = (params.get("stat") as StatKey) || "stars";
+  const statParam = params.get("stat");
+  const stat: StatKey = STAT_OPTIONS.some((o) => o.value === statParam)
+    ? (statParam as StatKey)
+    : "stars";
   const isClone = stat === "clones" || stat === "uniqueCloners";
   const gaugeMetric: Metric = isClone ? "stars" : (stat as Metric);
 
@@ -197,13 +202,17 @@ export default function RepositoryStatsPage(): JSX.Element {
   const label = STAT_OPTIONS.find((o) => o.value === stat)?.label ?? "Stars";
   const repos = reposData?.repositories ?? [];
 
-  const filteredRepos = productSearch
-    ? repos.filter((r) =>
-        (r.productName || r.repoName)
-          .toLowerCase()
-          .includes(productSearch.toLowerCase()),
-      )
-    : repos;
+  const filteredRepos = repos.filter((r) => {
+    if (filters.repos.length > 0 && !filters.repos.includes(r.id)) return false;
+    if (
+      productSearch &&
+      !(r.productName || r.repoName)
+        .toLowerCase()
+        .includes(productSearch.toLowerCase())
+    )
+      return false;
+    return true;
+  });
 
   const repoPagination = usePagination(filteredRepos);
 
@@ -319,7 +328,7 @@ export default function RepositoryStatsPage(): JSX.Element {
               onChange={(_, v: TableMode | null) => {
                 if (v) {
                   setTableMode(v);
-                  setTableDate(defaultDateForMode(v));
+                  setTableDate(defaultDateForMode(v, filters.to));
                 }
               }}
             >
@@ -341,6 +350,7 @@ export default function RepositoryStatsPage(): JSX.Element {
                     <Tooltip title="Filter by product">
                       <IconButton
                         size="small"
+                        aria-label="Filter by product"
                         onClick={() => setShowProductSearch(true)}
                       >
                         <Search size={14} />
@@ -351,6 +361,7 @@ export default function RepositoryStatsPage(): JSX.Element {
                       <InputBase
                         autoFocus
                         placeholder="Filter…"
+                        aria-label="Filter products"
                         value={productSearch}
                         onChange={(e) => setProductSearch(e.target.value)}
                         onKeyDown={(e) => {
@@ -366,15 +377,18 @@ export default function RepositoryStatsPage(): JSX.Element {
                           borderColor: "divider",
                         }}
                       />
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setProductSearch("");
-                          setShowProductSearch(false);
-                        }}
-                      >
-                        <X size={14} />
-                      </IconButton>
+                      <Tooltip title="Clear filter">
+                        <IconButton
+                          size="small"
+                          aria-label="Clear product filter"
+                          onClick={() => {
+                            setProductSearch("");
+                            setShowProductSearch(false);
+                          }}
+                        >
+                          <X size={14} />
+                        </IconButton>
+                      </Tooltip>
                     </>
                   )}
                 </Box>

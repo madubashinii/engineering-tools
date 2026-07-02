@@ -32,7 +32,9 @@ export interface SessionWarningDialogProps {
 
 /**
  * Shown after 10 minutes of inactivity. Stays open until the user explicitly
- * clicks Continue (resets the idle timer) or Logout (signs out). Never auto-dismisses.
+ * clicks Continue (resets the idle timer) or Logout (signs out) — or until the
+ * parent's grace-period timer force-logs-out an unattended session, which
+ * closes this dialog via `open` going false.
  */
 export default function SessionWarningDialog({
   open,
