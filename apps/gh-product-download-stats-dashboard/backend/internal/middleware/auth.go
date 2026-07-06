@@ -54,11 +54,15 @@ func (t *jwksSanitizer) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	if resp.StatusCode == http.StatusOK && resp.Body != nil {
-		// 64KB limit for JWKS responses
-		const maxJWKSBytes = 1 << 16
+		// Generous raw-read cap (x5c certificate chains can be sizeable) — this
+		// only guards against a malicious/broken upstream, not realistic JWKS
+		// payloads, since the real size check runs after x5c is stripped below.
+		const maxRawJWKSBytes = 5 << 20 // 5MB
+		// The sanitized (x5c/x5t#S256-stripped) payload should be small — only
+		// key material remains. Catches genuinely abnormal responses.
+		const maxSanitizedJWKSBytes = 1 << 16 // 64KB
 
-		// Use MaxBytesReader to throw a real error if the payload exceeds 64KB
-		bodyReader := http.MaxBytesReader(nil, resp.Body, maxJWKSBytes)
+		bodyReader := http.MaxBytesReader(nil, resp.Body, maxRawJWKSBytes)
 		bodyBytes, err := io.ReadAll(bodyReader)
 		resp.Body.Close()
 		if err != nil {
@@ -77,6 +81,9 @@ func (t *jwksSanitizer) RoundTrip(req *http.Request) (*http.Response, error) {
 			if newBytes, err := json.Marshal(payload); err == nil {
 				bodyBytes = newBytes
 			}
+		}
+		if len(bodyBytes) > maxSanitizedJWKSBytes {
+			return nil, fmt.Errorf("sanitized JWKS response too large: %d bytes", len(bodyBytes))
 		}
 		resp.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		resp.ContentLength = int64(len(bodyBytes))
@@ -148,10 +155,18 @@ func Auth(shutdownCtx context.Context, cfg Config) func(http.Handler) http.Handl
 			Timeout:   10 * time.Second,
 		}
 		jwksStorage, err := jwkset.NewStorageFromHTTP(cfg.JWKSEndpoint, jwkset.HTTPClientStorageOptions{
-			Client:                    customClient,
-			Ctx:                       shutdownCtx,
-			NoErrorReturnFirstHTTPReq: true,
-			RefreshInterval:           time.Hour,
+			Client: customClient,
+			Ctx:    shutdownCtx,
+			// false (default): the first HTTP fetch must succeed, so an
+			// unreachable/misconfigured JWKS endpoint fails startup below via the
+			// panic, instead of silently running with an empty key set (which
+			// would fail every JWT with no clearer signal than refresh-error logs).
+			NoErrorReturnFirstHTTPReq: false,
+			// Subsequent periodic refreshes: a failed refresh here just logs via
+			// RefreshErrorHandler and keeps the last-known-good key set — it does
+			// not clear it — so this interval is about staying current with IdP
+			// key rotation, not failure recovery.
+			RefreshInterval: 5 * time.Minute,
 			RefreshErrorHandler: func(ctx context.Context, err error) {
 				slog.ErrorContext(ctx, "failed to refresh JWKS", "url", cfg.JWKSEndpoint, "err", err)
 			},
