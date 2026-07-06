@@ -17,17 +17,77 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/MicahParks/jwkset"
 	"github.com/MicahParks/keyfunc/v3"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// jwksSanitizer strips the optional "x5c" (and "x5t#S256") fields from JWKS
+// responses before jwkset parses them. jwkset unconditionally runs every x5c
+// certificate through Go's strict x509.ParseCertificate, and Asgardeo's JWKS
+// certificate has a negative serial number — technically invalid per RFC 5280,
+// which Go rejects outright. x5c isn't needed for JWT signature verification
+// (only the raw key material, e.g. n/e, is), so removing it avoids the parse
+// failure entirely without weakening verification.
+type jwksSanitizer struct {
+	Transport http.RoundTripper
+}
+
+func (t *jwksSanitizer) RoundTrip(req *http.Request) (*http.Response, error) {
+	transport := t.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	resp, err := transport.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusOK && resp.Body != nil {
+		// 64KB limit for JWKS responses
+		const maxJWKSBytes = 1 << 16
+
+		// Use MaxBytesReader to throw a real error if the payload exceeds 64KB
+		bodyReader := http.MaxBytesReader(nil, resp.Body, maxJWKSBytes)
+		bodyBytes, err := io.ReadAll(bodyReader)
+		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("JWKS response too large or read failed: %w", err)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(bodyBytes, &payload); err == nil {
+			if keys, ok := payload["keys"].([]any); ok {
+				for _, k := range keys {
+					if keyObj, ok := k.(map[string]any); ok {
+						delete(keyObj, "x5c")
+						delete(keyObj, "x5t#S256")
+					}
+				}
+			}
+			if newBytes, err := json.Marshal(payload); err == nil {
+				bodyBytes = newBytes
+			}
+		}
+		resp.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		resp.ContentLength = int64(len(bodyBytes))
+
+		// Synchronize the HTTP header if it exists
+		if resp.Header.Get("Content-Length") != "" {
+			resp.Header.Set("Content-Length", strconv.Itoa(len(bodyBytes)))
+		}
+	}
+	return resp, nil
+}
 
 // authErrorBody is the JSON error payload for auth failures.
 type authErrorBody struct {
@@ -79,10 +139,30 @@ type jwtClaims struct {
 func Auth(shutdownCtx context.Context, cfg Config) func(http.Handler) http.Handler {
 	var keyFunc jwt.Keyfunc
 	if cfg.TokenValidatorEnabled {
-		jwks, err := keyfunc.NewDefaultCtx(shutdownCtx, []string{cfg.JWKSEndpoint})
+		// Asgardeo's JWKS response includes an x5c certificate chain with a
+		// negative serial number, which Go's x509 parser rejects outright.
+		// jwksSanitizer strips it (and x5t#S256) before jwkset ever parses the
+		// document, since neither is needed for JWT signature verification.
+		customClient := &http.Client{
+			Transport: &jwksSanitizer{},
+			Timeout:   10 * time.Second,
+		}
+		jwksStorage, err := jwkset.NewStorageFromHTTP(cfg.JWKSEndpoint, jwkset.HTTPClientStorageOptions{
+			Client:                    customClient,
+			Ctx:                       shutdownCtx,
+			NoErrorReturnFirstHTTPReq: true,
+			RefreshInterval:           time.Hour,
+			RefreshErrorHandler: func(ctx context.Context, err error) {
+				slog.ErrorContext(ctx, "failed to refresh JWKS", "url", cfg.JWKSEndpoint, "err", err)
+			},
+		})
 		if err != nil {
 			// Misconfigured auth must not silently pass — fail at startup.
 			panic("auth: failed to initialise JWKS from " + cfg.JWKSEndpoint + ": " + err.Error())
+		}
+		jwks, err := keyfunc.New(keyfunc.Options{Ctx: shutdownCtx, Storage: jwksStorage})
+		if err != nil {
+			panic("auth: failed to initialise keyfunc from " + cfg.JWKSEndpoint + ": " + err.Error())
 		}
 		keyFunc = jwks.Keyfunc
 	}
