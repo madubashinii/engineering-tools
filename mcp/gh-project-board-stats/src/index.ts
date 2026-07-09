@@ -22,6 +22,24 @@ import { connectMCP } from "./tools/mcpClient";
 import { routeIntent } from "./agent/routeIntent";
 import { runTool } from "./tools/runTool";
 
+function withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number
+): Promise<T> {
+    let timeout: NodeJS.Timeout;
+
+    const timeoutPromise = new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => {
+            reject(new Error("Request timed out"));
+        }, timeoutMs);
+    });
+
+    return Promise.race([
+        promise.finally(() => clearTimeout(timeout)),
+        timeoutPromise
+    ]);
+}
+
 async function main() {
     if (!process.env.ANTHROPIC_API_KEY) {
         throw new Error("Missing ANTHROPIC_API_KEY environment variable");
@@ -48,26 +66,30 @@ async function main() {
 
             const question = req.body?.question;
 
-            if (!question) {
+            if (typeof question !== "string" || !question.trim()) {
                 return res.status(400).json({
-                    error: "Missing question"
+                    error: "Missing or invalid question"
                 });
             }
 
             console.log("Question:", question);
 
             const intent =
-                await routeIntent(
-                    anthropic,
-                    question
+                await withTimeout(
+                    routeIntent(
+                        anthropic,
+                        question
+                    ),
+                    30000
                 );
 
-            console.log("Intent:", intent);
-
             const releases =
-                await runTool(
-                    client,
-                    intent
+                await withTimeout(
+                    runTool(
+                        client,
+                        intent
+                    ),
+                    30000
                 );
 
             return res.json({
@@ -76,14 +98,18 @@ async function main() {
             });
 
         } catch (error: any) {
-
             console.error(error);
 
+            if (error.message === "Request timed out") {
+                return res.status(504).json({
+                    error: "Request timed out"
+                });
+            }
+
             return res.status(500).json({
-                error: error.message
+                error: "Internal server error"
             });
         }
-
     });
 
     const port =
