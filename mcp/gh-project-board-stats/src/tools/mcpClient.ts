@@ -28,7 +28,13 @@ export async function connectMCP() {
         }
     });
 
-    await client.connect(transport);
+    const CONNECT_TIMEOUT_MS = 10_000;
+    await Promise.race([
+        client.connect(transport),
+        new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("MCP server connection timed out")), CONNECT_TIMEOUT_MS)
+        ),
+    ]);
 
     const response = await client.listTools();
     const toolNames = response.tools.map((t: any) => t.name);
