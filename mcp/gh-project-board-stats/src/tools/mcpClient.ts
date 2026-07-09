@@ -23,8 +23,8 @@ export async function connectMCP() {
             "--toolsets", "repos,issues,projects"
         ],
         env: {
+            ...process.env,
             GITHUB_PERSONAL_ACCESS_TOKEN: token,
-            PATH: process.env.PATH || ""
         }
     });
 
