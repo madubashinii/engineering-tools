@@ -21,7 +21,7 @@ import {
   ClassicTheme,
   HighContrastTheme,
 } from "@wso2/oxygen-ui";
-import type { OxygenTheme } from "@wso2/oxygen-ui/styles/OxygenThemeBase";
+import type { OxygenThemeType as OxygenTheme } from "@wso2/oxygen-ui";
 
 // Every Oxygen UI theme the dashboard exposes, keyed by the value used in
 // window.config.GH_PRODUCT_DOWNLOAD_STATS_DASHBOARD_THEME and persisted as the runtime choice.
