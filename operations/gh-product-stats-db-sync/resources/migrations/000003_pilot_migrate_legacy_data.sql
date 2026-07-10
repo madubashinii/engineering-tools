@@ -6,9 +6,9 @@
 -- be near-identical (both snapshot the same GitHub counters), but prefer
 -- ending this range the day BEFORE the new cron's first production write.)
 -- (Previously run: October 2024 through June 2026 fully migrated.)
--- To reuse: update the range in ALL SIX filters below (Section 2 dedup + outer,
--- Section 3 dedup + outer, both 4c counts) — a partial edit silently migrates
--- nothing while validation still looks plausible.
+-- To reuse: update the range in ALL SEVEN filters below (Section 2 dedup + outer,
+-- Section 3 dedup + outer, both 4c counts, 4d per-day counts) — a partial edit 
+-- silently migrates nothing while validation still looks plausible.
 -- ============================================================================
 
 USE `github_statistics`;
