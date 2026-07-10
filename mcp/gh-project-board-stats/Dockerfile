@@ -21,7 +21,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 
 RUN apt-get update && \
-    REAL_ARCH="${TARGETARCH:-amd64}" && \
+    apt-get install -y --no-install-recommends curl tar && \
     REAL_ARCH="${TARGETARCH:-amd64}" && \
     if [ "$REAL_ARCH" = "amd64" ]; then \
     MCP_ARCH="x86_64"; \
@@ -34,15 +34,16 @@ RUN apt-get update && \
       -o /tmp/github-mcp-server.tar.gz && \
     tar -xzf /tmp/github-mcp-server.tar.gz -C /tmp && \
     mv /tmp/github-mcp-server /usr/local/bin/github-mcp-server && \
-    ls -l /usr/local/bin/github-mcp-server && \
     chmod +x /usr/local/bin/github-mcp-server && \
+    ls -l /usr/local/bin/github-mcp-server && \
     rm /tmp/github-mcp-server.tar.gz && \
     rm -rf /var/lib/apt/lists/*
 
-RUN groupadd -r app && \
-    useradd -r -g app -d /app app
+RUN groupadd -g 10001 app && \
+    useradd -u 10001 -g app -d /app -m app
 
-USER app
+# Run as non-root user (required by Choreo security policy)
+USER 10001
 
 ENV MCP_SERVER_PATH=/usr/local/bin/github-mcp-server
 EXPOSE 8080
