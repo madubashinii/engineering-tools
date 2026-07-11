@@ -19,6 +19,7 @@ import { type ChartSeries } from "@components/charts/chartTypes";
 import {
   type Interval,
   type Metric,
+  type Repository,
   type RepoSeries,
 } from "@features/stats/types/stats";
 
@@ -93,7 +94,11 @@ export function mergeParams(
 ): URLSearchParams {
   const next = new URLSearchParams(current);
   for (const [key, value] of Object.entries(updates)) {
-    if (value == null || (Array.isArray(value) && value.length === 0) || value === "") {
+    if (
+      value == null ||
+      (Array.isArray(value) && value.length === 0) ||
+      value === ""
+    ) {
       next.delete(key);
     } else if (Array.isArray(value)) {
       next.set(key, value.join(","));
@@ -105,7 +110,10 @@ export function mergeParams(
 }
 
 // Builds the `repos`/`from`/`to`/`interval` query string for stats API calls.
-export function seriesQueryString(filters: StatsFilters, withInterval = true): string {
+export function seriesQueryString(
+  filters: StatsFilters,
+  withInterval = true,
+): string {
   const params = new URLSearchParams();
   params.set("from", filters.from);
   params.set("to", filters.to);
@@ -114,11 +122,18 @@ export function seriesQueryString(filters: StatsFilters, withInterval = true): s
   return params.toString();
 }
 
+export function productNameById(repos: Repository[]): Map<number, string> {
+  return new Map(repos.map((r) => [r.id, r.productName || r.repoName]));
+}
+
 // Maps backend RepoSeries to the generic chart series shape.
-export function toChartSeries(series: RepoSeries[]): ChartSeries[] {
+export function toChartSeries(
+  series: RepoSeries[],
+  names?: Map<number, string>,
+): ChartSeries[] {
   return series.map((s) => ({
     key: `repo-${s.repoId}`,
-    name: s.repoName,
+    name: names?.get(s.repoId) ?? s.repoName,
     points: s.points.map((p) => ({ date: p.date, value: p.value })),
   }));
 }
@@ -141,7 +156,9 @@ export function periodSummary(series: ChartSeries[]): PeriodSummary {
       byDate.set(p.date, (byDate.get(p.date) ?? 0) + p.value);
     }
   }
-  const entries = [...byDate.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const entries = [...byDate.entries()].sort((a, b) =>
+    a[0].localeCompare(b[0]),
+  );
   if (entries.length === 0) {
     return {
       total: 0,
