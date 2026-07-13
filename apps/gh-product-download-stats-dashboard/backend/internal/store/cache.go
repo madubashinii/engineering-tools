@@ -17,6 +17,7 @@
 package store
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -86,7 +87,29 @@ func (c *ttlCache) do(key string, fn func() (any, error)) (any, error) {
 	c.inflight[key] = call
 	c.mu.Unlock()
 
+	// If fn panics, every other goroutine already blocked on <-call.done (and
+	// every later caller for this key, since it stays in c.inflight) would
+	// hang forever with no way to recover but a process restart. The deferred
+	// recover unblocks them with an error and drops the inflight entry, then
+	// re-panics so this call's own panic still propagates normally — only
+	// concurrent bystanders get downgraded to an error, not the caller that
+	// actually triggered it.
+	panicked := true
+	defer func() {
+		if !panicked {
+			return
+		}
+		r := recover()
+		call.err = fmt.Errorf("ttlCache: panic computing key %q: %v", key, r)
+		close(call.done)
+		c.mu.Lock()
+		delete(c.inflight, key)
+		c.mu.Unlock()
+		panic(r)
+	}()
+
 	call.val, call.err = fn()
+	panicked = false
 	close(call.done)
 
 	c.mu.Lock()

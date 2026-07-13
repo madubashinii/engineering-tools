@@ -142,3 +142,72 @@ func TestTTLCacheSingleflight(t *testing.T) {
 		}
 	}
 }
+
+// TestTTLCachePanicUnblocksWaitersAndRecovers guards against a panic in fn
+// wedging a cache key forever: every waiter blocked on <-call.done for that
+// key (and, since the entry stayed in c.inflight, every later caller too)
+// would otherwise hang until the process restarts.
+func TestTTLCachePanicUnblocksWaitersAndRecovers(t *testing.T) {
+	c := newTTLCache(time.Minute, 8)
+	release := make(chan struct{})
+	registered := make(chan struct{})
+
+	panicker := func() (int, error) {
+		close(registered)
+		<-release
+		panic("boom")
+	}
+
+	// The goroutine that actually executes fn: its own panic must still
+	// propagate to it, not be silently downgraded to an error.
+	triggerDone := make(chan any, 1)
+	go func() {
+		defer func() { triggerDone <- recover() }()
+		_, _ = cachedDo(c, "k", panicker)
+	}()
+	<-registered // wait until this goroutine owns the inflight entry for "k"
+
+	// Bystanders: they block on <-call.done, not on fn itself, so they must
+	// come back with an error instead of hanging.
+	const waiters = 5
+	var wg sync.WaitGroup
+	errs := make([]error, waiters)
+	for i := range waiters {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, err := cachedDo(c, "k", panicker)
+			errs[i] = err
+		}(i)
+	}
+	time.Sleep(20 * time.Millisecond) // let waiters pile up on <-call.done
+	close(release)                    // now let fn panic
+
+	wg.Wait()
+	for i, err := range errs {
+		if err == nil {
+			t.Fatalf("waiter %d: got nil error, want the panic surfaced as an error", i)
+		}
+	}
+
+	if r := <-triggerDone; r != "boom" {
+		t.Fatalf("triggering goroutine: recovered %v, want the original panic value \"boom\"", r)
+	}
+
+	c.mu.Lock()
+	_, cached := c.entries["k"]
+	_, stillInflight := c.inflight["k"]
+	c.mu.Unlock()
+	if cached {
+		t.Fatal("a panicking call must not populate the cache")
+	}
+	if stillInflight {
+		t.Fatal("the inflight entry must be removed so the key isn't wedged forever")
+	}
+
+	// The key must be usable again, not permanently stuck.
+	v, err := cachedDo(c, "k", func() (int, error) { return 5, nil })
+	if err != nil || v != 5 {
+		t.Fatalf("call after panic: got %d, %v, want 5, nil", v, err)
+	}
+}
