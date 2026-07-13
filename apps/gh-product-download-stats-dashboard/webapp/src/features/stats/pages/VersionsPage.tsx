@@ -456,6 +456,7 @@ export default function VersionsPage(): JSX.Element {
                               autoFocus
                               placeholder="Filter…"
                               aria-label="Filter versions"
+                              autoComplete="off"
                               value={versionSearch}
                               onChange={(e) => setVersionSearch(e.target.value)}
                               onKeyDown={(e) => {
@@ -463,6 +464,12 @@ export default function VersionsPage(): JSX.Element {
                                   setVersionSearch("");
                                   setShowVersionSearch(false);
                                 }
+                              }}
+                              inputProps={{
+                                "data-lpignore": "true",
+                                "data-1p-ignore": "true",
+                                "data-bwignore": "true",
+                                "data-form-type": "other",
                               }}
                               sx={{
                                 fontSize: "0.8rem",

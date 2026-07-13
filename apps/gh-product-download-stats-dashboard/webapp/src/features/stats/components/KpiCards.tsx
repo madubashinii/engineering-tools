@@ -23,8 +23,10 @@ import {
   Copy,
 } from "@wso2/oxygen-ui-icons-react";
 import { type JSX } from "react";
+import { useNavigate } from "react-router";
 import { StatCard } from "@components/stat-card/StatCard";
 import TrendIndicator from "@components/stat-card/TrendIndicator";
+import { ROUTES } from "@constants/common";
 import { formatCompact, formatNumber } from "@utils/format";
 import { type Summary } from "@features/stats/types/stats";
 
@@ -41,6 +43,8 @@ export default function KpiCards({
   isLoading,
   isError,
 }: KpiCardsProps): JSX.Element {
+  const navigate = useNavigate();
+
   return (
     <Box
       sx={{
@@ -61,6 +65,7 @@ export default function KpiCards({
         iconColor="success"
         trend={<TrendIndicator pct={summary?.todayDeltaPct ?? null} />}
         tooltipText="New downloads on the latest sync day, across all products."
+        onClick={() => navigate(ROUTES.DOWNLOADS)}
         isLoading={isLoading}
         isError={isError}
       />
@@ -69,6 +74,8 @@ export default function KpiCards({
         value={formatCompact(summary?.monthDownloads ?? 0)}
         icon={<CalendarDays size={20} />}
         iconColor="primary"
+        tooltipText="Downloads so far this calendar month, across all products."
+        onClick={() => navigate(`${ROUTES.DOWNLOADS}?interval=month`)}
         isLoading={isLoading}
         isError={isError}
       />
@@ -78,6 +85,7 @@ export default function KpiCards({
         icon={<Database size={20} />}
         iconColor="info"
         tooltipText="Sum of the latest cumulative download count across all tracked products."
+        onClick={() => navigate(`${ROUTES.DOWNLOADS}?interval=cumulative`)}
         isLoading={isLoading}
         isError={isError}
       />
