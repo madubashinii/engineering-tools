@@ -57,7 +57,7 @@ func (s *Store) repositoriesWithStats(ctx context.Context, activeOnly bool) ([]R
 	if activeOnly {
 		query += " WHERE t.is_active = 1"
 	}
-	query += " ORDER BY t.is_active DESC, t.repo_name"
+	query += " ORDER BY t.is_active DESC, COALESCE(NULLIF(t.product_name, ''), t.repo_name)"
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -137,6 +137,7 @@ func (s *Store) CreateRepository(ctx context.Context, in NewRepository) (int, er
 	if err != nil {
 		return 0, fmt.Errorf("store: create repository last insert id: %w", err)
 	}
+	s.statsCache.purge()
 	return int(id), nil
 }
 
@@ -181,6 +182,7 @@ func (s *Store) UpdateRepository(ctx context.Context, id int, upd RepositoryUpda
 	if affected == 0 {
 		return apierror.ErrNotFound
 	}
+	s.statsCache.purge()
 	return nil
 }
 
@@ -199,6 +201,7 @@ func (s *Store) DeactivateRepository(ctx context.Context, id int) error {
 	if affected == 0 {
 		return apierror.ErrNotFound
 	}
+	s.statsCache.purge()
 	return nil
 }
 
