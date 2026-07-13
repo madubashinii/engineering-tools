@@ -55,6 +55,9 @@ type Config struct {
 // Store wraps the database connection pool.
 type Store struct {
 	db *sql.DB
+	// statsCache absorbs the expensive release_asset_daily_snapshots delta
+	// queries (see cache.go); repository mutations purge it.
+	statsCache *ttlCache
 }
 
 // New opens a connection pool to MySQL using the given config. The pool is
@@ -106,7 +109,7 @@ func New(cfg Config) (*Store, error) {
 		return nil, fmt.Errorf("store: ping db: %w", err)
 	}
 
-	return &Store{db: db}, nil
+	return &Store{db: db, statsCache: newTTLCache(statsCacheTTL, statsCacheMaxEntries)}, nil
 }
 
 // Close releases the underlying connection pool.

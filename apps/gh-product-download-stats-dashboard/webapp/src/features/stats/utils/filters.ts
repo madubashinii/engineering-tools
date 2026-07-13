@@ -19,6 +19,7 @@ import { type ChartSeries } from "@components/charts/chartTypes";
 import {
   type Interval,
   type Metric,
+  type Repository,
   type RepoSeries,
 } from "@features/stats/types/stats";
 
@@ -38,7 +39,6 @@ function isoDate(d: Date): string {
 }
 
 // Default inclusive range: last DEFAULT_RANGE_DAYS days ending today (UTC).
-// Used only by OverviewPage's "last 30 days" hero chart.
 export function defaultRange(): { from: string; to: string } {
   const to = new Date();
   const from = new Date();
@@ -47,9 +47,10 @@ export function defaultRange(): { from: string; to: string } {
 }
 
 // Default inclusive range for the analytics pages (Downloads, Versions,
-// Repository Stats): from the start of tracked history through today (UTC).
+// Repository Stats): last DEFAULT_RANGE_DAYS days ending today (UTC), same as
+// defaultRange().
 export function defaultAnalyticsRange(): { from: string; to: string } {
-  return { from: "2024-10-01", to: isoDate(new Date()) };
+  return defaultRange();
 }
 
 // Parses dashboard filters from URL search params, applying defaults.
@@ -93,7 +94,11 @@ export function mergeParams(
 ): URLSearchParams {
   const next = new URLSearchParams(current);
   for (const [key, value] of Object.entries(updates)) {
-    if (value == null || (Array.isArray(value) && value.length === 0) || value === "") {
+    if (
+      value == null ||
+      (Array.isArray(value) && value.length === 0) ||
+      value === ""
+    ) {
       next.delete(key);
     } else if (Array.isArray(value)) {
       next.set(key, value.join(","));
@@ -105,7 +110,10 @@ export function mergeParams(
 }
 
 // Builds the `repos`/`from`/`to`/`interval` query string for stats API calls.
-export function seriesQueryString(filters: StatsFilters, withInterval = true): string {
+export function seriesQueryString(
+  filters: StatsFilters,
+  withInterval = true,
+): string {
   const params = new URLSearchParams();
   params.set("from", filters.from);
   params.set("to", filters.to);
@@ -114,11 +122,18 @@ export function seriesQueryString(filters: StatsFilters, withInterval = true): s
   return params.toString();
 }
 
+export function productNameById(repos: Repository[]): Map<number, string> {
+  return new Map(repos.map((r) => [r.id, r.productName || r.repoName]));
+}
+
 // Maps backend RepoSeries to the generic chart series shape.
-export function toChartSeries(series: RepoSeries[]): ChartSeries[] {
+export function toChartSeries(
+  series: RepoSeries[],
+  names?: Map<number, string>,
+): ChartSeries[] {
   return series.map((s) => ({
     key: `repo-${s.repoId}`,
-    name: s.repoName,
+    name: names?.get(s.repoId) ?? s.repoName,
     points: s.points.map((p) => ({ date: p.date, value: p.value })),
   }));
 }
@@ -141,7 +156,9 @@ export function periodSummary(series: ChartSeries[]): PeriodSummary {
       byDate.set(p.date, (byDate.get(p.date) ?? 0) + p.value);
     }
   }
-  const entries = [...byDate.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const entries = [...byDate.entries()].sort((a, b) =>
+    a[0].localeCompare(b[0]),
+  );
   if (entries.length === 0) {
     return {
       total: 0,

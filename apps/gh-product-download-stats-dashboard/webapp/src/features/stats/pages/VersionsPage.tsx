@@ -436,7 +436,9 @@ export default function VersionsPage(): JSX.Element {
                 <TableHead>
                   <TableRow>
                     <TableCell>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                      >
                         Version
                         {!showVersionSearch ? (
                           <Tooltip title="Filter by version">
@@ -454,6 +456,7 @@ export default function VersionsPage(): JSX.Element {
                               autoFocus
                               placeholder="Filter…"
                               aria-label="Filter versions"
+                              autoComplete="off"
                               value={versionSearch}
                               onChange={(e) => setVersionSearch(e.target.value)}
                               onKeyDown={(e) => {
@@ -461,6 +464,12 @@ export default function VersionsPage(): JSX.Element {
                                   setVersionSearch("");
                                   setShowVersionSearch(false);
                                 }
+                              }}
+                              inputProps={{
+                                "data-lpignore": "true",
+                                "data-1p-ignore": "true",
+                                "data-bwignore": "true",
+                                "data-form-type": "other",
                               }}
                               sx={{
                                 fontSize: "0.8rem",

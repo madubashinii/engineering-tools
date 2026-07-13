@@ -57,6 +57,7 @@ import {
 import {
   parseFilters,
   mergeParams,
+  productNameById,
   toChartSeries,
 } from "@features/stats/utils/filters";
 import { formatCompact } from "@utils/format";
@@ -83,6 +84,7 @@ function transformClones(
   series: CloneSeries[],
   field: "count" | "uniques",
   interval: Interval,
+  names: Map<number, string>,
 ): ChartSeries[] {
   return series.map((s) => {
     const daily = s.points.map((p) => ({ date: p.date, value: p[field] }));
@@ -103,7 +105,11 @@ function transformClones(
         return { date: p.date, value: run };
       });
     }
-    return { key: `repo-${s.repoId}`, name: s.repoName, points };
+    return {
+      key: `repo-${s.repoId}`,
+      name: names.get(s.repoId) ?? s.repoName,
+      points,
+    };
   });
 }
 
@@ -170,13 +176,15 @@ export default function RepositoryStatsPage(): JSX.Element {
     metric: "openIssues",
   });
 
+  const names = productNameById(reposData?.repositories ?? []);
   const chartSeries: ChartSeries[] = isClone
     ? transformClones(
         cloneQuery.data?.series ?? [],
         stat === "uniqueCloners" ? "uniques" : "count",
         filters.interval,
+        names,
       )
-    : toChartSeries(metricQuery.data?.series ?? []);
+    : toChartSeries(metricQuery.data?.series ?? [], names);
 
   const onChange = (updates: Record<string, string | number[] | null>) =>
     setParams(mergeParams(params, updates), { replace: true });

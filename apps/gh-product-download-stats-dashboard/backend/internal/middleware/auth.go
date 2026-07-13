@@ -65,7 +65,9 @@ func (t *jwksSanitizer) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		bodyReader := http.MaxBytesReader(nil, resp.Body, maxRawJWKSBytes)
 		bodyBytes, err := io.ReadAll(bodyReader)
-		resp.Body.Close()
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			slog.WarnContext(req.Context(), "jwksSanitizer: failed to close JWKS response body", "err", closeErr)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("JWKS response too large or read failed: %w", err)
 		}

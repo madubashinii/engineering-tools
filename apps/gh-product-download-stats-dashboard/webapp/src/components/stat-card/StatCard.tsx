@@ -82,8 +82,11 @@ export function StatCard({
         height: "100%",
         ...(onClick && {
           cursor: "pointer",
-          transition: "box-shadow 0.2s ease, transform 0.15s ease",
-          "&:hover": { transform: "translateY(-2px)" },
+          transition: "box-shadow 0.2s ease, background-color 0.2s ease",
+          "&:hover": {
+            bgcolor: alpha(palette.light ?? palette.main, 0.06),
+            boxShadow: `0 0 0 1px ${alpha(palette.light ?? palette.main, 0.4)}, 0 4px 12px ${alpha(palette.main, 0.15)}`,
+          },
         }),
       }}
     >
