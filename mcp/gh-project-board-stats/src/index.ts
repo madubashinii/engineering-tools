@@ -108,9 +108,13 @@ function formatIterationLabel(iteration: string): string {
 }
 
 async function main() {
+    if (!process.env.ANTHROPIC_API_KEY) {
+        throw new Error("Initialization Failed: Missing ANTHROPIC_API_KEY environment variable");
+    }
+
     await initializeDatabase();
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const client = await connectMCP();
     const app = express();
 
@@ -124,9 +128,12 @@ async function main() {
         try {
             const question = req.body?.question;
             const ownerGroup = process.env.GITHUB_OWNER ?? "org-owner";
-            const userId = req.headers["x-authenticated-user"] ? String(req.headers["x-authenticated-user"]) : null;
-            if (!userId) {
-                return res.status(401).json({ error: "Missing identity verification parameter context." });
+
+            const rawUserHeader = req.headers["x-authenticated-user"];
+            const userId = rawUserHeader ? String(rawUserHeader).trim() : null;
+
+            if (!userId || !/^[a-zA-Z0-9_\-]+$/.test(userId)) {
+                return res.status(401).json({ error: "Missing or invalid identity verification parameter context." });
             }
 
             if (typeof question !== "string" || !question.trim()) {
@@ -197,13 +204,23 @@ async function main() {
             if (session && session.current_state === 'AWAITING_BOARD_SELECTION') {
                 const chosenBoard = question.trim();
 
+                const projectDetails = await withTimeout(30000, (signal) =>
+                    getProjectIdAndTitleByName(client, ownerGroup, chosenBoard, signal)
+                );
+
+                if (!projectDetails) {
+                    return res.json({
+                        message: `I couldn't find a board named "${chosenBoard}". Please type one of the valid options listed above.`
+                    });
+                }
+
                 await dbPool.execute(
                     "UPDATE user_session_state SET current_state = 'AWAITING_REMEMBER_CONFIRMATION', pending_board_name = ? WHERE user_id = ?",
-                    [chosenBoard, userId]
+                    [projectDetails.title, userId]
                 );
 
                 return res.json({
-                    message: `Got it. I'll use the "${chosenBoard}". Should I remember this board for your future release queries?`
+                    message: `Got it. I'll use the "${projectDetails.title}". Should I remember this board for your future release queries?`
                 });
             }
 
@@ -239,7 +256,7 @@ async function main() {
                     const releaseList = releases.map((r: any) => `• ${r.content?.title ?? "Untitled Issue"}`).join("\n");
 
                     return res.json({
-                        message: `Got it. I'll check the "${projectDetails.title}".\n\nAccording to the ${formatIterationLabel(resolvedIteration)}, the planned releases are:\n${releaseList || "• No active releases found."}`
+                        message: `Based on the active configuration for "${projectDetails.title}", the planned releases for the ${formatIterationLabel(resolvedIteration)} are:\n${releaseList || "• No active releases found."}`
                     });
                 }
 

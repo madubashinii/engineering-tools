@@ -30,7 +30,7 @@ export function belongsToFunction(item: any, functionName: string): boolean {
     const functionValue = getProjectFieldValue(item, "Function");
 
     if (!functionValue) {
-        return true;
+        return false;
     }
 
     return String(functionValue).toLowerCase() === functionName.toLowerCase();

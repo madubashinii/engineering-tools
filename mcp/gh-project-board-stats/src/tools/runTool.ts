@@ -90,8 +90,13 @@ export async function runTool(
     let hasNextPage = true;
     let currentPage = 1;
     const itemsPerPage = 50;
+    const MAX_PAGES = 10;
 
     while (hasNextPage) {
+        if (currentPage > MAX_PAGES) {
+            console.warn(`runTool: Reached maximum safety limit of ${MAX_PAGES} pages. Halting pagination.`);
+            break;
+        }
         const result = await client.callTool({
             name: "projects_list",
             arguments: {

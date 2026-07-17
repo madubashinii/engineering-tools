@@ -26,15 +26,16 @@ const dbConfig = {
 export let dbPool: mysql.Pool;
 
 export async function initializeDatabase() {
+  if (process.env.RUN_MIGRATIONS === 'true') {
+    const connection = await mysql.createConnection({
+      host: dbConfig.host,
+      user: dbConfig.user,
+      password: dbConfig.password
+    });
 
-  const connection = await mysql.createConnection({
-    host: dbConfig.host,
-    user: dbConfig.user,
-    password: dbConfig.password
-  });
-
-  await connection.execute(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\`;`);
-  await connection.end();
+    await connection.execute(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\`;`);
+    await connection.end();
+  }
 
   dbPool = mysql.createPool({
     ...dbConfig,
@@ -43,34 +44,37 @@ export async function initializeDatabase() {
     queueLimit: 0
   });
 
-  await dbPool.execute(`
-    CREATE TABLE IF NOT EXISTS user_project_preferences (
-      user_id VARCHAR(100) NOT NULL,
-      project_id INT NOT NULL,
-      organization_name VARCHAR(100) NOT NULL,
-      board_name VARCHAR(150) NOT NULL,
-      is_remembered TINYINT(1) DEFAULT 0,
-      PRIMARY KEY (user_id)
-    );
-  `);
+  if (process.env.RUN_MIGRATIONS === 'true') {
+    await dbPool.execute(`
+      CREATE TABLE IF NOT EXISTS user_project_preferences (
+        user_id VARCHAR(100) NOT NULL,
+        project_id INT NOT NULL,
+        organization_name VARCHAR(100) NOT NULL,
+        board_name VARCHAR(150) NOT NULL,
+        is_remembered TINYINT(1) DEFAULT 0,
+        PRIMARY KEY (user_id)
+      );
+    `);
 
-  await dbPool.execute(`
-    CREATE TABLE IF NOT EXISTS project_board_metadata (
-      project_id INT PRIMARY KEY,
-      layout_type ENUM('ITERATION_BASED', 'FLAT_KANBAN') DEFAULT 'ITERATION_BASED',
-      release_column_name VARCHAR(100) DEFAULT 'Done'
-    );
-  `);
+    await dbPool.execute(`
+      CREATE TABLE IF NOT EXISTS project_board_metadata (
+        project_id INT PRIMARY KEY,
+        layout_type ENUM('ITERATION_BASED', 'FLAT_KANBAN') DEFAULT 'ITERATION_BASED',
+        release_column_name VARCHAR(100) DEFAULT 'Done'
+      );
+    `);
 
-  await dbPool.execute(`
-    CREATE TABLE IF NOT EXISTS user_session_state (
-      user_id VARCHAR(100) PRIMARY KEY,
-      current_state VARCHAR(50) NOT NULL,
-      pending_board_name VARCHAR(150),
-      pending_iteration VARCHAR(50),
-      pending_function VARCHAR(100)
-    );
-  `);
+    await dbPool.execute(`
+      CREATE TABLE IF NOT EXISTS user_session_state (
+        user_id VARCHAR(100) PRIMARY KEY,
+        current_state VARCHAR(50) NOT NULL,
+        pending_board_name VARCHAR(150),
+        pending_iteration VARCHAR(50),
+        pending_function VARCHAR(100)
+      );
+    `);
+    console.log("Database structural tables checked/initialized.");
+  }
 
-  console.log("Database and structural tables initialized successfully!");
+  console.log(`Database connection pool initialized successfully for database: ${dbConfig.database}`);
 }
