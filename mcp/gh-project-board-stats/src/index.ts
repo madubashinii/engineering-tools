@@ -187,7 +187,7 @@ async function main() {
                 };
 
                 const releases = await withTimeout(30000, (signal) =>
-                    runTool(client, intentArgs, { owner: ownerGroup, projectNumber: projectDetails.number }, signal)
+                    runTool(client, intentArgs, { owner: ownerGroup, projectNumber: projectDetails.number })
                 );
 
                 const releaseList = releases.map((r: any) => `• ${r.content?.title ?? "Untitled Issue"}`).join("\n");
@@ -251,7 +251,7 @@ async function main() {
 
                 if (projectDetails) {
                     const releases = await withTimeout(30000, (signal) =>
-                        runTool(client, intent, { owner: ownerGroup, projectNumber: projectDetails.number }, signal)
+                        runTool(client, intent, { owner: ownerGroup, projectNumber: projectDetails.number })
                     );
                     const releaseList = releases.map((r: any) => `• ${r.content?.title ?? "Untitled Issue"}`).join("\n");
 
@@ -295,7 +295,7 @@ async function main() {
             }
 
             const releases = await withTimeout(30000, (signal) =>
-                runTool(client, intent, { owner: ownerGroup, projectNumber: savedPreference.project_id }, signal)
+                runTool(client, intent, { owner: ownerGroup, projectNumber: savedPreference.project_id })
             );
             const releaseList = releases.map((r: any) => `• ${r.content?.title ?? "Untitled Issue"}`).join("\n");
 
