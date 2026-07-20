@@ -84,6 +84,26 @@ export async function initializeDatabase() {
         pending_function VARCHAR(100)
       );
     `);
+
+    try {
+      const [columns]: any = await dbPool.execute(
+        "SHOW COLUMNS FROM user_project_preferences LIKE 'user_id'"
+      );
+
+      if (columns.length > 0) {
+        console.log("Legacy 'user_id' schema context detected. Migrating tracking preference table layout structures...");
+
+        // Migration: Drop the old primary key and change the column name to 'github_id'
+        await dbPool.execute("ALTER TABLE user_project_preferences DROP PRIMARY KEY");
+        await dbPool.execute("ALTER TABLE user_project_preferences CHANGE COLUMN user_id github_id VARCHAR(100) NOT NULL");
+        await dbPool.execute("ALTER TABLE user_project_preferences ADD PRIMARY KEY (github_id, project_id)");
+
+        console.log("Table structures for 'user_project_preferences' patched successfully.");
+      }
+    } catch (migrationErr) {
+      console.error("Warning: Optional database structural migration engine threw a structural state check exception: ", migrationErr);
+    }
+
     console.log("Database structural tables checked/initialized.");
   }
 

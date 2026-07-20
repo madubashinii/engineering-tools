@@ -176,31 +176,38 @@ async function main() {
                 return res.status(400).json({ error: "Missing or invalid question" });
             }
 
+            // Safe User Management Flow (Fixed PII and Race Conditions)
             const [userRows]: any = await dbPool.execute(
                 "SELECT github_id, email FROM users WHERE github_id = ?",
                 [githubId]
             );
 
-            let userId: number;
-
             if (userRows.length > 0) {
-                userId = userRows[0].id;
                 if (userRows[0].email !== email) {
                     await dbPool.execute("UPDATE users SET email = ? WHERE github_id = ?", [email, githubId]);
                 }
             } else {
                 try {
-                    const [insertResult]: any = await dbPool.execute(
+                    await dbPool.execute(
                         "INSERT INTO users (github_id, email) VALUES (?, ?)",
                         [githubId, email]
                     );
-                    userId = insertResult.insertId;
                 } catch (err: any) {
                     if (err.code === 'ER_DUP_ENTRY') {
-                        console.error(`Unique Email collision: User with email ${email} is already registered under a different github_id.`);
-                        return res.status(409).json({ error: "Account mapping mismatch context configuration error." });
+                        const [emailCheck]: any = await dbPool.execute(
+                            "SELECT github_id FROM users WHERE email = ?",
+                            [email]
+                        );
+
+                        if (emailCheck.length > 0 && emailCheck[0].github_id !== githubId) {
+                            console.error("Unique Email collision encountered for a separate GitHub identity profile context.");
+                            return res.status(409).json({ error: "Account mapping mismatch context configuration error." });
+                        }
+
+                        console.warn("Bypassed concurrent execution race condition for matching user profile.");
+                    } else {
+                        throw err;
                     }
-                    throw err;
                 }
             }
 
