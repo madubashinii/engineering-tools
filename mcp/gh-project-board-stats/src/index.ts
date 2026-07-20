@@ -40,6 +40,12 @@ function extractClaimsFromJwt(jwtAssertion: string): { githubId: string; email: 
         const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf-8');
         const payload = JSON.parse(payloadJson);
 
+        const currentTime = Math.floor(Date.now() / 1000);
+        if (payload.exp && currentTime >= payload.exp) {
+            console.error("JWT validation failed: Token expired.");
+            return null;
+        }
+
         const githubId = payload.github_id || payload.sub;
         const email = payload.email;
 
@@ -170,10 +176,33 @@ async function main() {
                 return res.status(400).json({ error: "Missing or invalid question" });
             }
 
-            await dbPool.execute(
-                "INSERT INTO users (github_id, email) VALUES (?, ?) ON DUPLICATE KEY UPDATE email = ?",
-                [githubId, email, email]
+            const [userRows]: any = await dbPool.execute(
+                "SELECT github_id, email FROM users WHERE github_id = ?",
+                [githubId]
             );
+
+            let userId: number;
+
+            if (userRows.length > 0) {
+                userId = userRows[0].id;
+                if (userRows[0].email !== email) {
+                    await dbPool.execute("UPDATE users SET email = ? WHERE github_id = ?", [email, githubId]);
+                }
+            } else {
+                try {
+                    const [insertResult]: any = await dbPool.execute(
+                        "INSERT INTO users (github_id, email) VALUES (?, ?)",
+                        [githubId, email]
+                    );
+                    userId = insertResult.insertId;
+                } catch (err: any) {
+                    if (err.code === 'ER_DUP_ENTRY') {
+                        console.error(`Unique Email collision: User with email ${email} is already registered under a different github_id.`);
+                        return res.status(409).json({ error: "Account mapping mismatch context configuration error." });
+                    }
+                    throw err;
+                }
+            }
 
             const [sessionRows]: any = await dbPool.execute("SELECT * FROM user_session_state WHERE github_id = ?", [githubId]);
             const [prefRows]: any = await dbPool.execute(

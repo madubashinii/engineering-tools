@@ -17,7 +17,6 @@
 import { getProjectFieldValue }
     from "./projectItem.service";
 
-
 export function getIterationValue(item: any) {
     const value = getProjectFieldValue(item, "Iteration");
     return value;
@@ -27,6 +26,13 @@ function startOfDay(date: Date): Date {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
     return d;
+}
+
+function parseLocalDate(dateStr: string): Date {
+    if (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) {
+        return new Date(`${dateStr.trim()}T00:00:00`);
+    }
+    return new Date(dateStr);
 }
 
 function getValidatedDuration(iteration: any): number | null {
@@ -51,7 +57,7 @@ function getIterationWindow(iteration: any): { start: Date; end: Date } | null {
         return null;
     }
 
-    const start = startOfDay(new Date(iteration.start_date));
+    const start = startOfDay(parseLocalDate(iteration.start_date));
     if (isNaN(start.getTime())) {
         console.warn("[Warning] Invalid iteration.start_date:", iteration.start_date);
         return null;
@@ -70,7 +76,6 @@ export function isCurrentIteration(iteration: any) {
     }
 
     const today = startOfDay(new Date());
-
     return today >= window.start && today <= window.end;
 }
 
@@ -78,7 +83,6 @@ export function isMatchingIteration(
     iteration: any,
     requestedIteration?: string
 ) {
-
     if (!iteration) {
         return false;
     }
@@ -88,13 +92,21 @@ export function isMatchingIteration(
     }
 
     if (requestedIteration === "next_week") {
-        const start = new Date(iteration.start_date);
-        if (isNaN(start.getTime())) {
-            console.warn("[Warning] Invalid iteration.start_date:", iteration.start_date);
+        const window = getIterationWindow(iteration);
+        if (!window) {
             return false;
         }
+
         const today = startOfDay(new Date());
-        return startOfDay(start) > today;
+        const duration = getValidatedDuration(iteration)!;
+
+        const targetFutureDate = new Date(today);
+        targetFutureDate.setDate(today.getDate() + duration);
+
+        return (
+            targetFutureDate >= window.start &&
+            targetFutureDate <= window.end
+        );
     }
 
     if (requestedIteration === "previous_week") {
@@ -105,6 +117,7 @@ export function isMatchingIteration(
 
         const today = startOfDay(new Date());
         const duration = getValidatedDuration(iteration)!;
+
         const targetPastDate = new Date(today);
         targetPastDate.setDate(today.getDate() - duration);
 
