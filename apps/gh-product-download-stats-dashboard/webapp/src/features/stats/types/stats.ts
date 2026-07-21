@@ -189,6 +189,7 @@ export interface PackageSeries {
 export interface PackageSeriesResponse {
   from: string;
   to: string;
+  interval: string;
   series: PackageSeries[];
 }
 
