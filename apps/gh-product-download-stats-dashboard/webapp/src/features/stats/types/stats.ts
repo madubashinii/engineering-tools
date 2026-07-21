@@ -156,3 +156,51 @@ export interface AssetBreakdown {
   version: string | null;
   assets: AssetBreakdownItem[];
 }
+
+export interface PackageRepoInfo {
+  repoId: number;
+  repoName: string;
+  productName: string | null;
+  packageCount: number;
+}
+
+export interface PackageReposResponse {
+  count: number;
+  repos: PackageRepoInfo[];
+}
+
+export interface PackageBreakdownItem {
+  packageName: string;
+  periodDownloads: number;
+  totalDownloads: number;
+  versionCount: number | null;
+}
+
+export interface PackageBreakdown {
+  repoId: number;
+  packages: PackageBreakdownItem[];
+}
+
+export interface PackageSeries {
+  packageName: string;
+  points: TimeSeriesPoint[];
+}
+
+export interface PackageSeriesResponse {
+  from: string;
+  to: string;
+  series: PackageSeries[];
+}
+
+export interface PackageVersionItem {
+  versionId: number;
+  tags: string | null;
+  periodDownloads: number;
+  totalDownloads: number;
+}
+
+export interface PackageVersionBreakdown {
+  repoId: number;
+  packageName: string;
+  versions: PackageVersionItem[];
+}
