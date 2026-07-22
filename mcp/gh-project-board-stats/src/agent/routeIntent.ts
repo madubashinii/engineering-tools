@@ -16,28 +16,59 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-function safeParse(text: string) {
+export interface RoutedIntent {
+  status: "READY" | "REQUIRES_BOARD_SELECTION";
+  extractedBoardName: string | null;
+  args: {
+    iteration: string | null;
+    function: string | null;
+  };
+  conversationalResponse: string | null;
+  rawInput?: string;
+}
+
+function safeParse(text: string, rawInput: string): RoutedIntent {
+  const fallback: RoutedIntent = {
+    status: "REQUIRES_BOARD_SELECTION",
+    extractedBoardName: null,
+    args: {
+      iteration: null,
+      function: null
+    },
+    conversationalResponse: "I couldn't quite process that request. Which project board would you like to view?",
+    rawInput
+  };
+
   try {
     const match = text.match(/\{[\s\S]*\}/);
-    if (match) {
-      return JSON.parse(match[0]);
+    const rawTextToParse = match ? match[0] : text;
+    const parsed: unknown = JSON.parse(rawTextToParse);
+
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      !Array.isArray(parsed) &&
+      "status" in parsed &&
+      "args" in parsed &&
+      typeof (parsed as Record<string, unknown>).args === "object" &&
+      (parsed as Record<string, unknown>).args !== null
+    ) {
+      return parsed as RoutedIntent;
     }
 
-    return JSON.parse(text);
+    console.warn("Parsed JSON did not match expected RoutedIntent object shape:", parsed);
+    return fallback;
   } catch (err) {
-    return {
-      status: "REQUIRES_BOARD_SELECTION",
-      extractedBoardName: null,
-      args: {
-        iteration: "this_week",
-        function: null
-      },
-      conversationalResponse: "I couldn't quite understand that request. Which project board would you like to check?"
-    };
+    console.error("Failed to parse intent JSON from LLM output:", text, err);
+    return fallback;
   }
 }
 
-export async function routeIntent(anthropic: Anthropic, input: string, contextBoardName: string | null) {
+export async function routeIntent(
+  anthropic: Anthropic,
+  input: string,
+  contextBoardName: string | null
+): Promise<RoutedIntent> {
   const res = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 300,
@@ -62,7 +93,7 @@ Provide output matching this strict schema structure:
   "status": "READY" | "REQUIRES_BOARD_SELECTION",
   "extractedBoardName": string | null,
   "args": {
-    "iteration": string,
+    "iteration": string | null,
     "function": string | null
   },
   "conversationalResponse": string | null
@@ -76,5 +107,5 @@ Behavior States:
   });
 
   const text = res.content[0]?.type === "text" ? res.content[0].text : "";
-  return safeParse(text);
+  return safeParse(text, input);
 }
