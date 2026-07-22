@@ -210,25 +210,25 @@ async function main() {
             }
 
             const [userRows]: any = await dbPool.execute(
-                "SELECT github_id, email FROM users WHERE github_id = ?",
+                "SELECT github_id, email FROM ghs_users WHERE github_id = ?",
                 [githubId]
             );
 
             if (userRows.length > 0) {
                 if (userRows[0].email !== email) {
-                    await dbPool.execute("UPDATE users SET email = ? WHERE github_id = ?", [email, githubId]);
+                    await dbPool.execute("UPDATE ghs_users SET email = ? WHERE github_id = ?", [email, githubId]);
                 }
             } else {
                 try {
                     await dbPool.execute(
-                        "INSERT INTO users (github_id, email) VALUES (?, ?)",
+                        "INSERT INTO ghs_users (github_id, email) VALUES (?, ?)",
                         [githubId, email]
                     );
-                    console.log(`Created new user record for github_id "${githubId}".`);
+
                 } catch (err: any) {
                     if (err.code === 'ER_DUP_ENTRY') {
                         const [emailCheck]: any = await dbPool.execute(
-                            "SELECT github_id FROM users WHERE email = ?",
+                            "SELECT github_id FROM ghs_users WHERE email = ?",
                             [email]
                         );
 
@@ -243,9 +243,9 @@ async function main() {
                 }
             }
 
-            const [sessionRows]: any = await dbPool.execute("SELECT * FROM user_session_state WHERE github_id = ?", [githubId]);
+            const [sessionRows]: any = await dbPool.execute("SELECT * FROM ghs_user_session_state WHERE github_id = ?", [githubId]);
             const [prefRows]: any = await dbPool.execute(
-                "SELECT project_id, board_name FROM user_project_preferences WHERE github_id = ? AND is_remembered = 1",
+                "SELECT project_id, board_name FROM ghs_user_project_preferences WHERE github_id = ? AND is_remembered = 1",
                 [githubId]
             );
 
@@ -261,7 +261,7 @@ async function main() {
                 );
 
                 if (!projectDetails) {
-                    await dbPool.execute("DELETE FROM user_session_state WHERE github_id = ?", [githubId]);
+                    await dbPool.execute("DELETE FROM ghs_user_session_state WHERE github_id = ?", [githubId]);
                     return res.json({
                         type: "error",
                         message: `I couldn't find "${session.pending_board_name}" on GitHub anymore. Let's start fresh, which board would you like to check?`
@@ -270,18 +270,18 @@ async function main() {
 
                 if (isYes) {
                     const [existing]: any = await dbPool.execute(
-                        "SELECT 1 FROM user_project_preferences WHERE github_id = ? AND project_id = ?",
+                        "SELECT 1 FROM ghs_user_project_preferences WHERE github_id = ? AND project_id = ?",
                         [githubId, projectDetails.number]
                     );
 
                     if (existing.length === 0) {
                         await dbPool.execute(
-                            "INSERT INTO user_project_preferences (github_id, project_id, organization_name, board_name, is_remembered) VALUES (?, ?, ?, ?, 1)",
+                            "INSERT INTO ghs_user_project_preferences (github_id, project_id, organization_name, board_name, is_remembered) VALUES (?, ?, ?, ?, 1)",
                             [githubId, projectDetails.number, ownerGroup, projectDetails.title]
                         );
                     } else {
                         await dbPool.execute(
-                            "UPDATE user_project_preferences SET is_remembered = 1 WHERE github_id = ? AND project_id = ?",
+                            "UPDATE ghs_user_project_preferences SET is_remembered = 1 WHERE github_id = ? AND project_id = ?",
                             [githubId, projectDetails.number]
                         );
                     }
@@ -298,7 +298,7 @@ async function main() {
                     runTool(client, intentArgs, { owner: ownerGroup, projectNumber: projectDetails.number }, signal)
                 );
 
-                await dbPool.execute("DELETE FROM user_session_state WHERE github_id = ?", [githubId]);
+                await dbPool.execute("DELETE FROM ghs_user_session_state WHERE github_id = ?", [githubId]);
 
                 return res.json({
                     type: "release_list",
@@ -327,7 +327,7 @@ async function main() {
                 }
 
                 await dbPool.execute(
-                    "UPDATE user_session_state SET current_state = 'AWAITING_REMEMBER_CONFIRMATION', pending_board_name = ? WHERE github_id = ?",
+                    "UPDATE ghs_user_session_state SET current_state = 'AWAITING_REMEMBER_CONFIRMATION', pending_board_name = ? WHERE github_id = ?",
                     [projectDetails.title, githubId]
                 );
 
@@ -370,7 +370,7 @@ async function main() {
                 const githubBoardsList = projects.map((p: any) => p.title) ?? [];
 
                 await dbPool.execute(
-                    "INSERT INTO user_session_state (github_id, current_state, pending_iteration, pending_function) VALUES (?, 'AWAITING_BOARD_SELECTION', ?, ?) ON DUPLICATE KEY UPDATE current_state='AWAITING_BOARD_SELECTION', pending_iteration=?, pending_function=?",
+                    "INSERT INTO ghs_user_session_state (github_id, current_state, pending_iteration, pending_function) VALUES (?, 'AWAITING_BOARD_SELECTION', ?, ?) ON DUPLICATE KEY UPDATE current_state='AWAITING_BOARD_SELECTION', pending_iteration=?, pending_function=?",
                     [githubId, resolvedIteration, intent.args?.function ?? null, resolvedIteration, intent.args?.function ?? null]
                 );
 
@@ -414,7 +414,7 @@ async function main() {
 
                 const pendingFunc = intent.args?.function ?? null;
                 await dbPool.execute(
-                    `INSERT INTO user_session_state
+                    `INSERT INTO ghs_user_session_state
                     (github_id, current_state, pending_iteration, pending_function, pending_board_name)
                     VALUES (?, 'AWAITING_REMEMBER_CONFIRMATION', ?, ?, ?)
                     ON DUPLICATE KEY UPDATE
