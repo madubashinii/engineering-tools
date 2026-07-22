@@ -26,8 +26,13 @@ type Repository struct {
 	ProductName   *string  `json:"productName"`
 	AssetPrefixes []string `json:"assetPrefixes"`
 	IsActive      bool     `json:"isActive"`
-	CreatedAt     string   `json:"createdAt"`
-	UpdatedAt     string   `json:"updatedAt"`
+	// TrackPackages gates gh-package-stats-scraper (migration
+	// 000002_add_track_packages_flag.sql in that project): most repos publish
+	// no GitHub container packages, so package scraping is opt-in, separate
+	// from IsActive which gates the main daily sync.
+	TrackPackages bool   `json:"trackPackages"`
+	CreatedAt     string `json:"createdAt"`
+	UpdatedAt     string `json:"updatedAt"`
 }
 
 // RepoSnapshot is the latest repository_daily_snapshots row for a repository.
@@ -198,6 +203,7 @@ type NewRepository struct {
 	ProductName   *string  `json:"productName"`
 	AssetPrefixes []string `json:"assetPrefixes"`
 	IsActive      *bool    `json:"isActive"`
+	TrackPackages *bool    `json:"trackPackages"`
 }
 
 // RepositoryUpdate is the payload to update a tracked repository. Nil fields are
@@ -206,4 +212,5 @@ type RepositoryUpdate struct {
 	ProductName   *string   `json:"productName"`
 	AssetPrefixes *[]string `json:"assetPrefixes"`
 	IsActive      *bool     `json:"isActive"`
+	TrackPackages *bool     `json:"trackPackages"`
 }

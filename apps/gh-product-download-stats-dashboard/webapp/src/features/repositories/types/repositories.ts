@@ -27,12 +27,14 @@ export interface NewRepository {
   productName?: string | null;
   assetPrefixes?: string[];
   isActive?: boolean;
+  trackPackages?: boolean;
 }
 
 export interface RepositoryUpdate {
   productName?: string | null;
   assetPrefixes?: string[];
   isActive?: boolean;
+  trackPackages?: boolean;
 }
 
 // A job's source: the Ballerina daily sync, or the package stats scraper.

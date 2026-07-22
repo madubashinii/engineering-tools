@@ -37,6 +37,9 @@ export interface Repository {
   productName: string | null;
   assetPrefixes: string[];
   isActive: boolean;
+  // Whether gh-package-stats-scraper covers this repo (opt-in; most repos
+  // publish no GitHub packages).
+  trackPackages: boolean;
   createdAt: string;
   updatedAt: string;
   latestSnapshot: RepoSnapshot | null;

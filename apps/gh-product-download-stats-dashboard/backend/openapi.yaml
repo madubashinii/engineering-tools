@@ -47,6 +47,9 @@ components:
           items: { type: string }
           maxItems: 50
         isActive: { type: boolean }
+        trackPackages:
+          type: boolean
+          description: Whether gh-package-stats-scraper covers this repo (opt-in; most repos publish no GitHub packages).
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         latestSnapshot:
@@ -191,6 +194,7 @@ components:
           items: { type: string }
           maxItems: 50
         isActive: { type: boolean }
+        trackPackages: { type: boolean, default: false }
     RepositoryUpdate:
       type: object
       properties:
@@ -200,6 +204,7 @@ components:
           items: { type: string }
           maxItems: 50
         isActive: { type: boolean }
+        trackPackages: { type: boolean }
     SyncLogsResponse:
       type: object
       description: >

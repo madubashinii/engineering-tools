@@ -118,6 +118,52 @@ func TestCreateRepository_Success(t *testing.T) {
 	}
 }
 
+func TestCreateRepository_TrackPackagesPassthrough(t *testing.T) {
+	var got store.NewRepository
+	mock := &mockStore{
+		createRepoFn: func(_ context.Context, in store.NewRepository) (int, error) {
+			got = in
+			return 1, nil
+		},
+	}
+	h := NewAdminHandler(mock, adminGroups())
+	w := httptest.NewRecorder()
+	body := `{"orgName":"openchoreo","repoName":"openchoreo","trackPackages":true}`
+	r := withUser(httptest.NewRequest(http.MethodPost, "/api/v1/admin/repositories", strings.NewReader(body)), testAdmin)
+
+	h.CreateRepository(w, r)
+
+	assertStatus(t, w, http.StatusCreated)
+	if got.TrackPackages == nil || !*got.TrackPackages {
+		t.Errorf("trackPackages = %v, want a pointer to true", got.TrackPackages)
+	}
+}
+
+func TestUpdateRepository_TrackPackagesPassthrough(t *testing.T) {
+	var got store.RepositoryUpdate
+	mock := &mockStore{
+		updateRepoFn: func(_ context.Context, _ int, upd store.RepositoryUpdate) error {
+			got = upd
+			return nil
+		},
+	}
+	h := NewAdminHandler(mock, adminGroups())
+	w := httptest.NewRecorder()
+	r := withUser(httptest.NewRequest(http.MethodPatch, "/api/v1/admin/repositories/9", strings.NewReader(`{"trackPackages":false}`)), testAdmin)
+	r.SetPathValue("id", "9")
+
+	h.UpdateRepository(w, r)
+
+	assertStatus(t, w, http.StatusNoContent)
+	if got.TrackPackages == nil || *got.TrackPackages {
+		t.Errorf("trackPackages = %v, want a pointer to false", got.TrackPackages)
+	}
+	// Fields omitted from the JSON body must stay nil (partial-update semantics).
+	if got.IsActive != nil {
+		t.Errorf("isActive = %v, want nil (not present in the request body)", got.IsActive)
+	}
+}
+
 func TestUpdateRepository_NotFound(t *testing.T) {
 	mock := &mockStore{
 		updateRepoFn: func(_ context.Context, _ int, _ store.RepositoryUpdate) error {
