@@ -87,5 +87,8 @@ credentials.
 
 Choreo Scheduled Task, daily at `30 1 * * *` UTC — after the main sync;
 unlike it, this job has no midnight-semantics constraint, only "once a day,
-consistently". Total nightly volume is ~150–200 page fetches, throttled to
-one per 1.2s.
+consistently". Total nightly volume is ~150–200 page fetches, each preceded
+by a randomized wait in [1.0s, 1.6s) (`internal/github/scrape.go`) — a
+perfectly uniform interval is itself a signal bot/abuse detection can key
+off, so the spacing is deliberately irregular on top of just being polite
+about volume.

@@ -36,10 +36,15 @@ import (
 	"github.com/wso2-open-operations/engineering-tools/operations/gh-package-stats-scraper/internal/store"
 )
 
-// scrapeDelay is the minimum spacing between github.com page fetches: the
-// whole nightly run is ~150-200 fetches, so ~1.2s spacing keeps it well under
-// any bot-detection profile while still finishing in a few minutes.
-const scrapeDelay = 1200 * time.Millisecond
+// Spacing between github.com page fetches: the whole nightly run is
+// ~150-200 fetches, so this keeps it well under any bot-detection profile
+// while still finishing in a few minutes. Each wait lands randomly in
+// [scrapeMinDelay, scrapeMinDelay+scrapeJitterRange) — i.e. [1.0s, 1.6s) — a
+// perfectly uniform interval is itself a signal abuse detection can key off.
+const (
+	scrapeMinDelay    = 1000 * time.Millisecond
+	scrapeJitterRange = 600 * time.Millisecond
+)
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
@@ -78,7 +83,7 @@ func run() error {
 	}
 
 	api := github.NewAPIClient(cfg.githubPAT)
-	scraper := github.NewScraper(scrapeDelay)
+	scraper := github.NewScraper(scrapeMinDelay, scrapeJitterRange)
 	defer scraper.Close()
 
 	// snapshot_date is the run date (UTC) — same convention as the main sync.

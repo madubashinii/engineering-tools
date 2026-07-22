@@ -127,13 +127,59 @@ func TestParseVersionRowsBrokenRowFailsLoudly(t *testing.T) {
 	}
 }
 
+// TestScraperWaitIsJittered pins that consecutive waits are NOT a fixed
+// interval (the old time.Ticker behavior) and that every observed delay
+// falls within [minDelay, minDelay+jitterRange).
+func TestScraperWaitIsJittered(t *testing.T) {
+	s := NewScraper(20*time.Millisecond, 30*time.Millisecond)
+	ctx := context.Background()
+
+	const samples = 12
+	delays := make([]time.Duration, samples)
+	for i := range samples {
+		start := time.Now()
+		if err := s.wait(ctx); err != nil {
+			t.Fatal(err)
+		}
+		delays[i] = time.Since(start)
+	}
+
+	distinct := map[time.Duration]bool{}
+	for i, d := range delays {
+		if d < 20*time.Millisecond || d > 60*time.Millisecond {
+			t.Errorf("delay[%d] = %v, want within [20ms, 60ms] (min 20ms + up to 30ms jitter, generous margin for scheduling)", i, d)
+		}
+		distinct[d.Round(time.Millisecond)] = true
+	}
+	if len(distinct) < 2 {
+		t.Errorf("all %d observed delays rounded to the same value — jitter isn't varying: %v", samples, delays)
+	}
+}
+
+// TestScraperWaitRespectsContextCancellation ensures a canceled context
+// interrupts the wait immediately rather than blocking for the full delay.
+func TestScraperWaitRespectsContextCancellation(t *testing.T) {
+	s := NewScraper(time.Hour, 0)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	err := s.wait(ctx)
+	if err == nil {
+		t.Fatal("want an error from a canceled context, got nil")
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("wait took %v after immediate cancellation, want near-instant return", elapsed)
+	}
+}
+
 // TestLiveScrape validates the parsers against TODAY'S real github.com markup
 // (fixtures can go stale silently). Guarded: only runs with RUN_LIVE=1.
 func TestLiveScrape(t *testing.T) {
 	if os.Getenv("RUN_LIVE") != "1" {
 		t.Skip("set RUN_LIVE=1 to scrape live github.com")
 	}
-	s := NewScraper(1200 * time.Millisecond)
+	s := NewScraper(1000*time.Millisecond, 600*time.Millisecond)
 	defer s.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

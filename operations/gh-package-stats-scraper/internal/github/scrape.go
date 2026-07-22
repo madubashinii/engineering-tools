@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -59,24 +60,47 @@ type VersionRow struct {
 	Downloads int64
 }
 
-// Scraper fetches and parses github.com package pages, throttled to one
-// request per interval so a nightly run never resembles a bot burst.
+// Scraper fetches and parses github.com package pages, waiting a randomized
+// delay before each request so a nightly run never resembles a bot burst. The
+// randomization (not a fixed tick) is deliberate: a perfectly uniform fetch
+// cadence is itself a signal bot/abuse detection can key off, on top of just
+// being polite about request volume.
 type Scraper struct {
-	httpClient *http.Client
-	throttle   *time.Ticker
+	httpClient  *http.Client
+	minDelay    time.Duration
+	jitterRange time.Duration
 }
 
-// NewScraper creates a Scraper with the given minimum delay between fetches.
-func NewScraper(delay time.Duration) *Scraper {
+// NewScraper creates a Scraper that waits a randomized duration in
+// [minDelay, minDelay+jitterRange) before every request attempt.
+func NewScraper(minDelay, jitterRange time.Duration) *Scraper {
 	return &Scraper{
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		throttle:   time.NewTicker(delay),
+		httpClient:  &http.Client{Timeout: 30 * time.Second},
+		minDelay:    minDelay,
+		jitterRange: jitterRange,
 	}
 }
 
-// Close releases the throttle ticker.
-func (s *Scraper) Close() {
-	s.throttle.Stop()
+// Close is currently a no-op — kept so callers can unconditionally `defer
+// scraper.Close()` even as internals change (e.g. if a connection pool or
+// background goroutine is added later).
+func (s *Scraper) Close() {}
+
+// wait blocks for the randomized inter-request delay, or returns early with
+// ctx's error if it's canceled first.
+func (s *Scraper) wait(ctx context.Context) error {
+	delay := s.minDelay
+	if s.jitterRange > 0 {
+		delay += rand.N(s.jitterRange)
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // packagePageURL returns the package landing page URL. Package names can
@@ -96,10 +120,8 @@ func versionsPageURL(org, repo, pkg string, page int) string {
 func (s *Scraper) fetch(ctx context.Context, pageURL string) ([]byte, error) {
 	var lastErr error
 	for attempt := 0; attempt < 2; attempt++ {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-s.throttle.C:
+		if err := s.wait(ctx); err != nil {
+			return nil, err
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
 		if err != nil {
