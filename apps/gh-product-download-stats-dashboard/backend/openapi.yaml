@@ -202,6 +202,10 @@ components:
         isActive: { type: boolean }
     SyncLogsResponse:
       type: object
+      description: >
+        Merged job history from the Ballerina daily sync (sync_job_logs) and
+        the package stats scraper (package_scrape_job_logs), most recent
+        first. id is only unique within a source, never across the two.
       properties:
         count: { type: integer }
         logs:
@@ -210,6 +214,7 @@ components:
             type: object
             properties:
               id: { type: integer, format: int64 }
+              source: { type: string, enum: [DB_SYNC, PACKAGE_SCRAPE] }
               status: { type: string }
               reposSynced: { type: integer }
               reposFailed: { type: integer }

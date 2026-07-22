@@ -183,3 +183,33 @@ func TestListSyncLogs_Success(t *testing.T) {
 		t.Fatalf("count = %d, logs = %d; want 1/1", got.Count, len(got.Logs))
 	}
 }
+
+// TestListSyncLogs_MergesSources pins that both job sources (the Ballerina
+// daily sync and the package stats scraper) pass through to the response
+// untouched — including that their id spaces overlap (each is only unique
+// within its own source).
+func TestListSyncLogs_MergesSources(t *testing.T) {
+	mock := &mockStore{
+		listSyncLogFn: func(_ context.Context, _, _ int) ([]store.SyncJobLog, error) {
+			return []store.SyncJobLog{
+				{ID: 9, Source: store.JobLogSourcePackageScrape, Status: "SUCCESS"},
+				{ID: 9, Source: store.JobLogSourceDBSync, Status: "PARTIAL_FAILURE"},
+			}, nil
+		},
+	}
+	h := NewAdminHandler(mock, adminGroups())
+	w := httptest.NewRecorder()
+	r := withUser(httptest.NewRequest(http.MethodGet, "/api/v1/admin/sync/logs", nil), testAdmin)
+
+	h.ListSyncLogs(w, r)
+
+	assertStatus(t, w, http.StatusOK)
+	got := decodeJSON[syncLogsResponse](t, w)
+	if len(got.Logs) != 2 {
+		t.Fatalf("logs = %d; want 2", len(got.Logs))
+	}
+	if got.Logs[0].Source != store.JobLogSourcePackageScrape || got.Logs[1].Source != store.JobLogSourceDBSync {
+		t.Fatalf("sources = [%s, %s]; want [%s, %s]",
+			got.Logs[0].Source, got.Logs[1].Source, store.JobLogSourcePackageScrape, store.JobLogSourceDBSync)
+	}
+}
