@@ -27,12 +27,21 @@ export interface RoutedIntent {
   rawInput?: string;
 }
 
+function detectIterationFromRawInput(rawInput: string): string | null {
+  if (/next\s*week/i.test(rawInput)) return "next_week";
+  if (/last\s*week|previous\s*week/i.test(rawInput)) return "previous_week";
+  if (/this\s*week/i.test(rawInput)) return "this_week";
+  return null;
+}
+
 function safeParse(text: string, rawInput: string): RoutedIntent {
+  const recoveredIteration = detectIterationFromRawInput(rawInput);
+
   const fallback: RoutedIntent = {
     status: "REQUIRES_BOARD_SELECTION",
     extractedBoardName: null,
     args: {
-      iteration: null,
+      iteration: recoveredIteration,
       function: null
     },
     conversationalResponse: "I couldn't quite process that request. Which project board would you like to view?",
@@ -53,7 +62,13 @@ function safeParse(text: string, rawInput: string): RoutedIntent {
       typeof (parsed as Record<string, unknown>).args === "object" &&
       (parsed as Record<string, unknown>).args !== null
     ) {
-      return parsed as RoutedIntent;
+      const typedParsed = parsed as RoutedIntent;
+
+      if (!typedParsed.args.iteration && recoveredIteration) {
+        typedParsed.args.iteration = recoveredIteration;
+      }
+
+      return typedParsed;
     }
 
     console.warn("Parsed JSON did not match expected RoutedIntent object shape:", parsed);
