@@ -62,6 +62,13 @@ function safeParse(text: string, rawInput: string): RoutedIntent {
       typeof (parsed as Record<string, unknown>).args === "object" &&
       (parsed as Record<string, unknown>).args !== null
     ) {
+      const obj = parsed as Record<string, unknown>;
+
+      if (obj.status !== "READY" && obj.status !== "REQUIRES_BOARD_SELECTION") {
+        console.warn(`Invalid status value "${String(obj.status)}" returned from LLM. Falling back.`);
+        return fallback;
+      }
+
       const typedParsed = parsed as RoutedIntent;
 
       if (!typedParsed.args.iteration && recoveredIteration) {

@@ -35,8 +35,8 @@ export interface RoutedIntent {
 }
 
 const choreoJwksUri = process.env.CHOREO_JWKS_URI || "https://sts.choreo.dev/oauth2/jwks";
-const asgardeoJwksUri = "https://api.asgardeo.io/t/wso2/oauth2/jwks";
-const jwksUri = process.env.NODE_ENV === "development" ? asgardeoJwksUri : choreoJwksUri;
+const asgardeoJwksUri = process.env.ASGARDEO_JWKS_URI || "https://api.asgardeo.io/t/wso2/oauth2/jwks";
+const jwksUri = process.env.AUTH_ISSUER === "asgardeo" ? asgardeoJwksUri : choreoJwksUri;
 
 const clientJwks = jwksClient({
     jwksUri,
@@ -494,4 +494,5 @@ async function main() {
 
 main().catch((err) => {
     console.error("Fatal error during startup, service failed to start:", err);
+    process.exit(1);
 });
