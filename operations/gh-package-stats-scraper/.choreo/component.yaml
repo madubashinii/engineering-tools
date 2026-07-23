@@ -1,0 +1,10 @@
+schemaVersion: 1.2
+
+id: gh-package-stats-scraper
+displayName: GitHub Package Stats Scraper
+
+componentType: Job
+description: |
+  Scheduled task that records download counts for the GitHub container
+  packages of tracked repositories, feeding the Packages tab of the GitHub
+  Product Download Stats Dashboard.
