@@ -29,7 +29,7 @@ flowchart TB
     class novera,claude,github,mysql ext
 ```
 
-There is no human actor at this level. The caller is a software system, not a person, and this service only ever sees the question text and a verified JWT, nothing about the chat session or the end user behind it. MySQL user, session, and preference rows are scoped by the identity extracted from that JWT. GitHub reads use the deployment-scoped GITHUB_OWNER and shared GitHub token.
+There is no human actor at this level. The caller is a software system, not a person, and this service only ever sees the question text and a verified JWT, nothing about the chat session or the end user behind it. Every downstream call (MySQL scoping, GitHub reads) is keyed off the identity extracted from that JWT, never off anything Claude returns.
 
 ## Container & Deployment Diagram (C4 Level 2)
 
@@ -59,7 +59,7 @@ flowchart TB
     express -- "stdio (IPC),<br/>MCP tool calls" --> mcp
     mcp -- "HTTPS, PAT" --> github
     express -- "HTTPS, messages.create" --> claude
-    express -- "TLS over IPSec/VPN tunnel<br/>mysql2 / TCP 3306" --> db
+    express -- "TLS, private network<br/>mysql2 / TCP 3306" --> db
 
     classDef inScope fill:#1168bd,color:#fff,stroke:#0e5ba6
     classDef ext fill:#999,color:#fff,stroke:#6b6b6b
@@ -71,7 +71,7 @@ flowchart TB
 
 - **Express App**: the only HTTP-facing process. Hosts `POST /query` and `GET /health`; verifies the inbound `x-jwt-assertion`; runs the single Claude classification call; resolves/switches boards; executes and filters the board query; formats the markdown response.
 - **Local MCP Subprocess** (`github-mcp-server`): spawned via stdio, not a remote MCP server. All GitHub reads (`list_projects`, `list_project_fields`, `list_project_items`) go through it, authenticated with a GitHub Personal Access Token passed in its environment.
-- **MySQL (`ghs_` schema)**: four tables holding users, per-board layout metadata, per-user session/active-board state, and recently-used board preferences. Reached over an on-premise IPSec/VPN tunnel rather than a Choreo-managed cloud database, a materially different (and slower/less elastic) network path worth calling out for anyone reasoning about latency or availability.
+- **MySQL (`ghs_` schema)**: four tables holding users, per-board layout metadata, per-user session/active-board state, and recently-used board preferences. Reached over a privately-networked connection rather than a Choreo-managed cloud database, a materially different (and likely slower/less elastic) network path worth calling out for anyone reasoning about latency or availability.
 
 ### Why one container, one MCP tool
 
@@ -158,7 +158,7 @@ flowchart TB
 
 ```mermaid
 sequenceDiagram
-    actor Novera as Novera
+    participant Novera as Novera
     participant Agent as GitHub Stats Agent
     participant Claude as Anthropic Claude
     participant MCP as MCP Subprocess
@@ -187,7 +187,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    actor Novera as Novera
+    participant Novera as Novera
     participant Agent as GitHub Stats Agent
     participant Claude as Anthropic Claude
     participant MCP as MCP Subprocess
@@ -281,7 +281,7 @@ The GitHub side is a single MCP tool, `projects_list`, dispatched by a `method` 
 | `list_project_fields` | Query Executor | One call per query, used to resolve field IDs before fetching items |
 | `list_project_items` | Query Executor | Paginated (`per_page: 100`), `MAX_ROUNDS = 20`, scoped to the field IDs actually needed |
 
-Both `getBoards` and `runTool` parse the MCP text-content response as JSON directly (`safeJsonParse`), rejecting anything that doesn't start with `{` or `[`. `getBoards` additionally retries once, without the abort signal, on a `TypeError` mentioning `v3Schema`, a workaround for a client-library quirk when a signal is passed; `runTool`'s calls do not have this same fallback, which is an inconsistency worth resolving if the same failure mode shows up there.
+Both `getBoards` and `runTool` parse the MCP text-content response as JSON directly (`safeJsonParse`), rejecting anything that doesn't start with `{` or `[`. `getBoards` additionally retries once, without the abort signal, on a `TypeError` mentioning `v3Schema`, a workaround for a client-library quirk when a signal is passed; `runTool`'s calls do not have this same fallback. Tracked as follow-up work (`<issue link>`) to apply the same retry to `runTool` if the failure mode shows up there too.
 
 ## Error handling & resilience
 
@@ -299,4 +299,3 @@ Both `getBoards` and `runTool` parse the MCP text-content response as JSON direc
 - `RUN_MIGRATIONS` (default unset/false): gates database/table creation and column migrations at startup
 - `AUTH_ISSUER` (`choreo` default, or `asgardeo`) plus `CHOREO_JWKS_URI` / `ASGARDEO_JWKS_URI` overrides
 - `PORT` (default `8080`)
-

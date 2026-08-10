@@ -58,7 +58,7 @@ Request body:
 
 ```json
 {
-"question": "What releases are planned for next week?"
+  "question": "What releases are planned for next week?"
 }
 ```
 
@@ -100,11 +100,17 @@ DB_HOST
 DB_USER
 DB_PASSWORD
 DB_NAME
-RUN_MIGRATIONS=true
-AUTH_ISSUER=choreo
+RUN_MIGRATIONS
+AUTH_ISSUER=choreo|asgardeo
 CHOREO_JWKS_URI
 ASGARDEO_JWKS_URI
+MCP_SERVER_PATH=/usr/local/bin/github-mcp-server
+PORT
 ```
+
+`RUN_MIGRATIONS` defaults to off. Set it to `true` on first boot or after a schema change, not as a standing value on every deploy.
+
+`PORT` defaults to `8080`; set it if that port is already in use.
 
 `GITHUB_PERSONAL_ACCESS_TOKEN` (or `GITHUB_TOKEN` as a fallback) is required at startup — the service fails to boot without one, since it's passed to the local GitHub MCP subprocess for all board/item reads.
 
