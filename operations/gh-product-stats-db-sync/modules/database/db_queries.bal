@@ -64,6 +64,28 @@ isolated function completeSyncJobQuery(int jobId, SyncJobStatus status, int repo
         id = ${jobId}
 `;
 
+# Build the clone-stats backfill query for an existing repository snapshot row.
+# UPDATE only — never creates a row, so a bucket whose target snapshot row
+# doesn't exist (e.g. a date before the repo was tracked) matches 0 rows and
+# is a harmless no-op.
+#
+# + trackedRepoId - tracked_repositories.id
+# + snapshotDate - The snapshot row's date ("YYYY-MM-DD") to update
+# + cloneCount - Clone count for the row's activity day
+# + cloneUniques - Unique cloners for the row's activity day
+# + return - sql:ParameterizedQuery - Update query for the repository_daily_snapshots table
+isolated function updateCloneStatsQuery(int trackedRepoId, string snapshotDate, int cloneCount, int cloneUniques)
+    returns sql:ParameterizedQuery =>
+`
+    UPDATE repository_daily_snapshots
+    SET
+        clone_count = ${cloneCount},
+        clone_uniques = ${cloneUniques}
+    WHERE
+        tracked_repo_id = ${trackedRepoId}
+        AND snapshot_date = ${snapshotDate}
+`;
+
 # Build the upsert query for a repository's daily snapshot.
 # Idempotent for the same day via ON DUPLICATE KEY UPDATE on the snapshot_date unique key.
 #

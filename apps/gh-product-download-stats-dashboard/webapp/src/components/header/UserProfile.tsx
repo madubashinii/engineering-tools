@@ -15,21 +15,18 @@
 // under the License.
 
 import { UserMenu } from "@wso2/oxygen-ui";
-import { LogOut, User } from "@wso2/oxygen-ui-icons-react";
-import { type JSX, useState } from "react";
+import { LogOut } from "@wso2/oxygen-ui-icons-react";
+import { type JSX } from "react";
 import { useAsgardeo } from "@asgardeo/react";
 import { useLogger } from "@hooks/useLogger";
 import { useIdTokenClaims } from "@hooks/useIdTokenClaims";
-import UserProfileModal from "@components/header/UserProfileModal";
 import { resolveUserInfo } from "@utils/userClaims";
 
-// Header avatar with a dropdown (profile header, "Profile", "Sign out"). Profile
-// details are read from the ID token; clicking "Profile" opens the detail dialog.
+// Header avatar with a dropdown: name/email header, then "Sign out".
 export default function UserProfile(): JSX.Element {
   const { signOut } = useAsgardeo();
   const claims = useIdTokenClaims();
   const logger = useLogger();
-  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   const info = resolveUserInfo(claims);
 
@@ -42,30 +39,19 @@ export default function UserProfile(): JSX.Element {
   };
 
   return (
-    <>
-      <UserMenu>
-        <UserMenu.Trigger name={info.fullName} avatar={info.avatarUrl} />
-        <UserMenu.Header
-          name={info.fullName}
-          email={info.email}
-          avatar={info.avatarUrl}
-        />
-        <UserMenu.Divider />
-        <UserMenu.Item
-          icon={<User size={16} />}
-          label="Profile"
-          onClick={() => setProfileModalOpen(true)}
-        />
-        <UserMenu.Logout
-          icon={<LogOut size={16} />}
-          label="Sign out"
-          onClick={handleSignOut}
-        />
-      </UserMenu>
-      <UserProfileModal
-        open={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
+    <UserMenu>
+      <UserMenu.Trigger name={info.fullName} avatar={info.avatarUrl} />
+      <UserMenu.Header
+        name={info.fullName}
+        email={info.email}
+        avatar={info.avatarUrl}
       />
-    </>
+      <UserMenu.Divider />
+      <UserMenu.Logout
+        icon={<LogOut size={16} />}
+        label="Sign out"
+        onClick={handleSignOut}
+      />
+    </UserMenu>
   );
 }

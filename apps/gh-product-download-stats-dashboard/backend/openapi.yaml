@@ -47,6 +47,9 @@ components:
           items: { type: string }
           maxItems: 50
         isActive: { type: boolean }
+        trackPackages:
+          type: boolean
+          description: Whether gh-package-stats-scraper covers this repo (opt-in; most repos publish no GitHub packages).
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         latestSnapshot:
@@ -63,6 +66,7 @@ components:
         totalClonesLast14d: { type: integer }
         todayDownloads: { type: integer, format: int64 }
         todayDeltaPct: { type: number, nullable: true }
+        asOfDate: { type: string, format: date, nullable: true }
         monthDownloads: { type: integer, format: int64 }
         lastSyncDate: { type: string, format: date-time, nullable: true }
         lastSyncStatus: { type: string, nullable: true }
@@ -95,7 +99,7 @@ components:
       properties:
         from: { type: string, format: date }
         to: { type: string, format: date }
-        interval: { type: string, enum: [day, month] }
+        interval: { type: string, enum: [day, month, cumulative] }
         series:
           type: array
           items: { $ref: '#/components/schemas/RepoSeries' }
@@ -105,7 +109,7 @@ components:
         metric: { type: string, enum: [stars, forks, watchers, openIssues] }
         from: { type: string, format: date }
         to: { type: string, format: date }
-        interval: { type: string, enum: [day, month] }
+        interval: { type: string, enum: [day, month, cumulative] }
         series:
           type: array
           items: { $ref: '#/components/schemas/RepoSeries' }
@@ -190,6 +194,7 @@ components:
           items: { type: string }
           maxItems: 50
         isActive: { type: boolean }
+        trackPackages: { type: boolean, default: false }
     RepositoryUpdate:
       type: object
       properties:
@@ -199,8 +204,13 @@ components:
           items: { type: string }
           maxItems: 50
         isActive: { type: boolean }
+        trackPackages: { type: boolean }
     SyncLogsResponse:
       type: object
+      description: >
+        Merged job history from the Ballerina daily sync (sync_job_logs) and
+        the package stats scraper (package_scrape_job_logs), most recent
+        first. id is only unique within a source, never across the two.
       properties:
         count: { type: integer }
         logs:
@@ -209,6 +219,7 @@ components:
             type: object
             properties:
               id: { type: integer, format: int64 }
+              source: { type: string, enum: [DB_SYNC, PACKAGE_SCRAPE] }
               status: { type: string }
               reposSynced: { type: integer }
               reposFailed: { type: integer }
@@ -278,6 +289,27 @@ paths:
       security: []
       responses:
         '200': { description: OK }
+  /api/v1/user-info:
+    get:
+      summary: The signed-in caller's identity and privileges
+      description: >
+        isAdmin is computed server-side against the ADMIN_GROUPS environment
+        variable, so the frontend can gate its Admin UI without knowing the
+        admin group names.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  email: { type: string }
+                  isAdmin: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
   /api/v1/repositories:
     get:
       summary: List tracked repositories with their latest stats
@@ -349,12 +381,17 @@ paths:
   /api/v1/stats/metric:
     get:
       summary: Time series for a single GitHub stat (stars/forks/watchers/openIssues)
+      description: >-
+        interval=day/month return the actual change in the metric (gained or
+        lost that day, or summed over the month) — not clamped to zero, since
+        losing stars/forks/watchers or issues closing are real negative
+        deltas. interval=cumulative returns the raw point-in-time value.
       parameters:
         - name: metric
           in: query
           required: true
           schema: { type: string, enum: [stars, forks, watchers, openIssues] }
-          description: Which point-in-time stat to return as a series.
+          description: Which GitHub stat to return as a series.
         - $ref: '#/components/parameters/From'
         - $ref: '#/components/parameters/To'
         - $ref: '#/components/parameters/Repos'
@@ -446,6 +483,11 @@ paths:
   /api/v1/stats/assets/{repoId}:
     get:
       summary: Download breakdown by release asset
+      description: >-
+        downloadCount per asset is summed as daily deltas over from-to (same
+        pattern as /stats/versions), not a single point-in-time cumulative
+        snapshot — it relies on the date range the same way the Versions
+        table/series does.
       parameters:
         - name: repoId
           in: path
@@ -485,6 +527,140 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CompareResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /api/v1/stats/packages/repos:
+    get:
+      summary: Tracked repositories that have GitHub package data
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  repos:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        repoId: { type: integer }
+                        repoName: { type: string }
+                        productName: { type: string, nullable: true }
+                        packageCount: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /api/v1/stats/packages/{repoId}:
+    get:
+      summary: Per-package download figures for a repository over a date range
+      parameters:
+        - name: repoId
+          in: path
+          required: true
+          schema: { type: integer }
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  repoId: { type: integer }
+                  packages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        packageName: { type: string }
+                        periodDownloads: { type: integer }
+                        totalDownloads: { type: integer }
+                        versionCount: { type: integer, nullable: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /api/v1/stats/packages/{repoId}/series:
+    get:
+      summary: Per-package download series for a repository
+      parameters:
+        - name: repoId
+          in: path
+          required: true
+          schema: { type: integer }
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/Interval'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from: { type: string }
+                  to: { type: string }
+                  interval: { type: string, enum: [day, month, cumulative] }
+                  series:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        packageName: { type: string }
+                        points:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              date: { type: string }
+                              value: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /api/v1/stats/packages/{repoId}/versions:
+    get:
+      summary: Per-version download figures for one package over a date range
+      parameters:
+        - name: repoId
+          in: path
+          required: true
+          schema: { type: integer }
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - name: package
+          in: query
+          required: true
+          schema: { type: string }
+          description: Package name (URL-encoded; may contain slashes)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  repoId: { type: integer }
+                  packageName: { type: string }
+                  versions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        versionId: { type: integer }
+                        tags: { type: string, nullable: true }
+                        periodDownloads: { type: integer }
+                        totalDownloads: { type: integer }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }

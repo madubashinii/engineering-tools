@@ -17,19 +17,19 @@
 import { type UseQueryResult } from "@tanstack/react-query";
 import { useApiQuery } from "@hooks/useApiQuery";
 import { ApiQueryKeys } from "@constants/apiConstants";
-import { type CompareResponse } from "@features/stats/types/stats";
+import { type PackageBreakdown } from "@features/stats/types/stats";
 
-// GET /api/v1/stats/compare — side-by-side figures. Requires >= 1 repo id.
-export function useGetCompare(
-  repoIds: number[],
+// GET /api/v1/stats/packages/{repoId} — per-package period downloads and
+// latest totals over the date range.
+export function useGetPackageBreakdown(
+  repoId: number | null,
   from: string,
   to: string,
-): UseQueryResult<CompareResponse, Error> {
-  const enabled = repoIds.length > 0;
-  const qs = `repos=${repoIds.join(",")}&from=${from}&to=${to}`;
-  return useApiQuery<CompareResponse>(
-    [ApiQueryKeys.COMPARE, qs],
-    `/stats/compare?${qs}`,
+): UseQueryResult<PackageBreakdown, Error> {
+  const enabled = repoId != null && repoId > 0;
+  return useApiQuery<PackageBreakdown>(
+    [ApiQueryKeys.PACKAGE_BREAKDOWN, repoId, from, to],
+    `/stats/packages/${repoId}?from=${from}&to=${to}`,
     enabled,
   );
 }

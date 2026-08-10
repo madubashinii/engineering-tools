@@ -13,6 +13,7 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+import ballerina/log;
 
 # Fetch repository stats. The Entity Service identity model uses orgName == owner == the GitHub org.
 #
@@ -25,10 +26,12 @@ public isolated function getRepository(string orgName, string repoName) returns 
 
 # Fetch all releases for a repository, paginating until a short page is returned.
 # No prerelease filter is sent, so the Entity Service returns all releases.
+# Stops early (logging a warning) after MAX_RELEASE_PAGES, so a misbehaving
+# upstream that never returns a short page can't wedge the cron in an infinite loop.
 #
 # + orgName - GitHub org name
 # + repoName - Repository name
-# + return - All releases, or an error
+# + return - All releases (possibly truncated at MAX_RELEASE_PAGES), or an error
 public isolated function getAllReleases(string orgName, string repoName) returns Release[]|error {
     Release[] allReleases = [];
     int page = 1;
@@ -38,6 +41,11 @@ public isolated function getAllReleases(string orgName, string repoName) returns
         );
         allReleases.push(...batch);
         if batch.length() < RELEASES_PAGE_SIZE {
+            break;
+        }
+        if page >= MAX_RELEASE_PAGES {
+            log:printWarn("getAllReleases: hit MAX_RELEASE_PAGES; stopping pagination early",
+                orgName = orgName, repoName = repoName, page = page, releasesFetched = allReleases.length());
             break;
         }
         page += 1;

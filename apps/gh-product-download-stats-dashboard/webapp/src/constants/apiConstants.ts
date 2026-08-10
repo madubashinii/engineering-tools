@@ -16,6 +16,7 @@
 
 // Query-key roots for TanStack Query caches.
 export const ApiQueryKeys = {
+  USER_INFO: "user-info",
   SUMMARY: "summary",
   REPOSITORIES: "repositories",
   ADMIN_REPOSITORIES: "admin-repositories",
@@ -25,6 +26,9 @@ export const ApiQueryKeys = {
   CLONE_SERIES: "clone-series",
   VERSION_BREAKDOWN: "version-breakdown",
   ASSET_BREAKDOWN: "asset-breakdown",
-  COMPARE: "compare",
+  PACKAGE_REPOS: "package-repos",
+  PACKAGE_BREAKDOWN: "package-breakdown",
+  PACKAGE_SERIES: "package-series",
+  PACKAGE_VERSIONS: "package-versions",
   SYNC_LOGS: "sync-logs",
 } as const;

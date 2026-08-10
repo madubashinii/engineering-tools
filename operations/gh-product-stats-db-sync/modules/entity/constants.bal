@@ -28,3 +28,9 @@ public const decimal RETRY_MAX_INTERVAL = 20.0;
 
 # Number of releases requested per page from the Entity Service.
 public const int RELEASES_PAGE_SIZE = 100;
+
+# Safety ceiling on release pages fetched per repository (50 pages x 100/page =
+# 5000 releases — far beyond any real repo's release count). Guards against an
+# unbounded loop if the Entity Service ever misbehaves (e.g. always returns a
+# full page regardless of the page param).
+public const int MAX_RELEASE_PAGES = 50;

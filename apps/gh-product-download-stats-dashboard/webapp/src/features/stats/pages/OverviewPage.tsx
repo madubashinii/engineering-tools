@@ -23,14 +23,18 @@ import ChartCard from "@features/stats/components/ChartCard";
 import SeriesChart from "@components/charts/SeriesChart";
 import { useGetSummary } from "@features/stats/api/useGetSummary";
 import { useGetDailySeries } from "@features/stats/api/useGetDailySeries";
+import { useGetRepositories } from "@features/stats/api/useGetRepositories";
 import {
   defaultRange,
+  productNameById,
   toChartSeries,
   type StatsFilters,
 } from "@features/stats/utils/filters";
 
 export default function OverviewPage(): JSX.Element {
   const summaryQuery = useGetSummary();
+  const { data: reposData } = useGetRepositories();
+  const names = productNameById(reposData?.repositories ?? []);
 
   // Hero chart = DAILY downloads (the primary metric), last 30 days, all products.
   const range = defaultRange();
@@ -67,7 +71,7 @@ export default function OverviewPage(): JSX.Element {
       >
         <ChartCard title="Daily Downloads (last 30 days)">
           <SeriesChart
-            series={toChartSeries(dailyQuery.data?.series ?? [])}
+            series={toChartSeries(dailyQuery.data?.series ?? [], names)}
             isLoading={dailyQuery.isLoading}
             isError={dailyQuery.isError}
             onRetry={() => void dailyQuery.refetch()}

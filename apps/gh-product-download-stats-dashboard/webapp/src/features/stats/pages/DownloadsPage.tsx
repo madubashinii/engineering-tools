@@ -45,10 +45,12 @@ import SeriesChart from "@components/charts/SeriesChart";
 import { StatCard } from "@components/stat-card/StatCard";
 import { useGetTotalSeries } from "@features/stats/api/useGetTotalSeries";
 import { useGetDailySeries } from "@features/stats/api/useGetDailySeries";
+import { useGetRepositories } from "@features/stats/api/useGetRepositories";
 import { type Interval } from "@features/stats/types/stats";
 import {
   parseFilters,
   mergeParams,
+  productNameById,
   toChartSeries,
   periodSummary,
   buildDateMatrix,
@@ -71,8 +73,12 @@ export default function DownloadsPage(): JSX.Element {
   const dailyQuery = useGetDailySeries(filters);
   const totalQuery = useGetTotalSeries(filters);
   const activeQuery = isCumulative ? totalQuery : dailyQuery;
+  const { data: reposData } = useGetRepositories();
 
-  const series = toChartSeries(activeQuery.data?.series ?? []);
+  const series = toChartSeries(
+    activeQuery.data?.series ?? [],
+    productNameById(reposData?.repositories ?? []),
+  );
   const matrix = buildDateMatrix(series);
   const summary = periodSummary(series);
 
@@ -261,7 +267,9 @@ export default function DownloadsPage(): JSX.Element {
                           <IconButton
                             size="small"
                             aria-label={
-                              dateLabel ? "Change date filter" : "Filter by date"
+                              dateLabel
+                                ? "Change date filter"
+                                : "Filter by date"
                             }
                             onClick={() => dateInputRef.current?.showPicker()}
                           >

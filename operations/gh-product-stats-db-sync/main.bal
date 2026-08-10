@@ -89,21 +89,72 @@ isolated function syncRepository(database:TrackedRepository repo) returns error?
     entity:Repository repository = check entity:getRepository(org, name);
     entity:Release[] releases = check entity:getAllReleases(org, name);
 
-    // Single source of truth for "today" — used both to pick today's clone-traffic
-    // record and as the snapshot_date written below, so the two never drift apart.
-    string today = currentUtcDate();
+    // Single UTC instant for all of this repo's date math.
+    time:Utc now = time:utcNow();
+
+    // snapshot_date is stamped with the cron's run date (today), matching the
+    // convention already baked into the migrated historical data (see
+    // resources/migrations — legacy rows use DATE(created_at), i.e. the sync date,
+    // not the date the data represents). NOTE: the cumulative totals fetched below
+    // (downloads/stars/forks/watchers/issues) are still, in truth, the state as of
+    // the END of the PREVIOUS day — GitHub's API only reports a running cumulative
+    // count, so a same-day delta can never exist. Downstream consumers must treat
+    // "this row's delta" as "yesterday's real activity, labeled with today's date."
+    string snapshotDate = formatUtcDate(now);
 
     // Soft dependency: clone traffic needs Administration:read; store 0 if unavailable.
+    // GitHub's clone count/uniques for the current UTC day are cumulative-and-partial
+    // until the day closes, so match yesterday's — the most recent *complete* — day
+    // instead, even though it's stored under today's snapshotDate above (same
+    // one-day-behind reality as the download/star/fork figures).
+    //
+    // CAVEAT: GitHub's traffic rollup lags UTC midnight by several hours, so a run
+    // shortly after midnight (the 00:30 UTC schedule) usually finds NO bucket for
+    // the just-ended day yet — today's row then starts at 0. That's why every run
+    // also BACKFILLS earlier days' snapshot rows from the up-to-14 daily buckets
+    // the API returns (bucket for day D belongs to the row with snapshot_date =
+    // D + 1, per the one-day-behind convention above): whatever a run misses,
+    // the next day's run self-heals.
     int cloneCount = 0;
     int cloneUniques = 0;
     entity:ClonesTraffic|error clones = entity:getClonesTraffic(org, name);
     if clones is entity:ClonesTraffic {
+        string yesterday = formatUtcDate(time:utcAddSeconds(now, -86400));
+        boolean yesterdayBucketFound = false;
         foreach entity:CloneRecord cloneRecord in clones.clones {
-            if cloneRecord.timestamp.startsWith(today) {
+            if cloneRecord.timestamp.startsWith(yesterday) {
+                // Yesterday's bucket feeds today's snapshot row, written below.
                 cloneCount = cloneRecord.count;
                 cloneUniques = cloneRecord.uniques;
-                break;
+                yesterdayBucketFound = true;
+                continue;
             }
+            string bucketDate = cloneRecord.timestamp.length() >= 10
+                ? cloneRecord.timestamp.substring(0, 10) : cloneRecord.timestamp;
+            if bucketDate >= yesterday {
+                // Today's partial bucket: its complete value is tomorrow's job.
+                continue;
+            }
+            // Backfill: bucket for completed day D -> existing row snapshot_date = D+1.
+            time:Utc|error bucketUtc = time:utcFromString(cloneRecord.timestamp);
+            if bucketUtc is error {
+                log:printWarn("Unparseable clone bucket timestamp; skipping backfill",
+                        bucketUtc, repo = name, org = org, timestamp = cloneRecord.timestamp);
+                continue;
+            }
+            string targetSnapshotDate = formatUtcDate(time:utcAddSeconds(bucketUtc, 86400));
+            error? backfill = database:updateCloneStats(repo.id, targetSnapshotDate,
+                    cloneRecord.count, cloneRecord.uniques);
+            if backfill is error {
+                // Best-effort self-heal: never fail the repo sync over it —
+                // tomorrow's run retries the same buckets anyway.
+                log:printWarn("Clone stats backfill failed", backfill,
+                        repo = name, org = org, snapshotDate = targetSnapshotDate);
+            }
+        }
+        if !yesterdayBucketFound {
+            log:printInfo("No clone bucket published for yesterday yet (GitHub traffic lag); " +
+                    "storing 0 — tomorrow's run backfills it", repo = name, org = org, yesterday = yesterday);
         }
     } else {
         log:printWarn("Clone traffic fetch failed; storing 0", clones, repo = name, org = org);
@@ -138,7 +189,7 @@ isolated function syncRepository(database:TrackedRepository repo) returns error?
         cloneCount,
         cloneUniques
     };
-    check database:writeRepoSnapshot(repo.id, today, repoData, assetSnapshots);
+    check database:writeRepoSnapshot(repo.id, snapshotDate, repoData, assetSnapshots);
 }
 
 # True if the asset name matches the prefix filter. An empty prefix list means "include all".
@@ -181,11 +232,12 @@ isolated function toPrefixes(json prefixes) returns string[] {
     return result;
 }
 
-# Today's date in UTC as "YYYY-MM-DD", to match GitHub clone-traffic timestamps.
+# Formats a UTC instant as "YYYY-MM-DD".
 #
-# + return - The current UTC date string
-isolated function currentUtcDate() returns string {
-    time:Civil civil = time:utcToCivil(time:utcNow());
+# + utc - The UTC instant to format
+# + return - The formatted date string
+isolated function formatUtcDate(time:Utc utc) returns string {
+    time:Civil civil = time:utcToCivil(utc);
     string month = civil.month < 10 ? "0" + civil.month.toString() : civil.month.toString();
     string day = civil.day < 10 ? "0" + civil.day.toString() : civil.day.toString();
     return string `${civil.year}-${month}-${day}`;

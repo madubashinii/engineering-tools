@@ -37,6 +37,9 @@ export interface Repository {
   productName: string | null;
   assetPrefixes: string[];
   isActive: boolean;
+  // Whether gh-package-stats-scraper covers this repo (opt-in; most repos
+  // publish no GitHub packages).
+  trackPackages: boolean;
   createdAt: string;
   updatedAt: string;
   latestSnapshot: RepoSnapshot | null;
@@ -65,6 +68,10 @@ export interface Summary {
   totalClonesLast14d: number;
   todayDownloads: number;
   todayDeltaPct: number | null;
+  // The actual snapshot date todayDownloads/topProducts[].todayDownloads are
+  // computed from — may be older than today if the sync cron hasn't run/
+  // succeeded recently.
+  asOfDate: string | null;
   monthDownloads: number;
   lastSyncDate: string | null;
   lastSyncStatus: string | null;
@@ -153,18 +160,51 @@ export interface AssetBreakdown {
   assets: AssetBreakdownItem[];
 }
 
-export interface CompareItem {
+export interface PackageRepoInfo {
   repoId: number;
   repoName: string;
-  totalDownloads: number;
-  downloadsInRange: number;
-  stars: number;
-  forks: number;
-  clonesInRange: number;
+  productName: string | null;
+  packageCount: number;
 }
 
-export interface CompareResponse {
+export interface PackageReposResponse {
+  count: number;
+  repos: PackageRepoInfo[];
+}
+
+export interface PackageBreakdownItem {
+  packageName: string;
+  periodDownloads: number;
+  totalDownloads: number;
+  versionCount: number | null;
+}
+
+export interface PackageBreakdown {
+  repoId: number;
+  packages: PackageBreakdownItem[];
+}
+
+export interface PackageSeries {
+  packageName: string;
+  points: TimeSeriesPoint[];
+}
+
+export interface PackageSeriesResponse {
   from: string;
   to: string;
-  items: CompareItem[];
+  interval: string;
+  series: PackageSeries[];
+}
+
+export interface PackageVersionItem {
+  versionId: number;
+  tags: string | null;
+  periodDownloads: number;
+  totalDownloads: number;
+}
+
+export interface PackageVersionBreakdown {
+  repoId: number;
+  packageName: string;
+  versions: PackageVersionItem[];
 }

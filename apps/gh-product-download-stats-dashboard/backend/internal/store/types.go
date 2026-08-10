@@ -26,8 +26,13 @@ type Repository struct {
 	ProductName   *string  `json:"productName"`
 	AssetPrefixes []string `json:"assetPrefixes"`
 	IsActive      bool     `json:"isActive"`
-	CreatedAt     string   `json:"createdAt"`
-	UpdatedAt     string   `json:"updatedAt"`
+	// TrackPackages gates gh-package-stats-scraper (migration
+	// 000002_add_track_packages_flag.sql in that project): most repos publish
+	// no GitHub container packages, so package scraping is opt-in, separate
+	// from IsActive which gates the main daily sync.
+	TrackPackages bool   `json:"trackPackages"`
+	CreatedAt     string `json:"createdAt"`
+	UpdatedAt     string `json:"updatedAt"`
 }
 
 // RepoSnapshot is the latest repository_daily_snapshots row for a repository.
@@ -50,18 +55,29 @@ type RepositoryWithStats struct {
 
 // Summary holds the dashboard KPI figures.
 type Summary struct {
-	TrackedRepositories int          `json:"trackedRepositories"`
-	TotalDownloads      int64        `json:"totalDownloads"`
-	TotalStars          int          `json:"totalStars"`
-	TotalForks          int          `json:"totalForks"`
-	TotalClonesLast30d  int          `json:"totalClonesLast30d"`
-	TotalClonesLast14d  int          `json:"totalClonesLast14d"`
-	TodayDownloads      int64        `json:"todayDownloads"`
-	TodayDeltaPct       *float64     `json:"todayDeltaPct"`
-	MonthDownloads      int64        `json:"monthDownloads"`
-	LastSyncDate        *string      `json:"lastSyncDate"`
-	LastSyncStatus      *string      `json:"lastSyncStatus"`
-	TopProducts         []TopProduct `json:"topProducts"`
+	TrackedRepositories int   `json:"trackedRepositories"`
+	TotalDownloads      int64 `json:"totalDownloads"`
+	TotalStars          int   `json:"totalStars"`
+	TotalForks          int   `json:"totalForks"`
+	TotalClonesLast30d  int   `json:"totalClonesLast30d"`
+	TotalClonesLast14d  int   `json:"totalClonesLast14d"`
+	// TodayDownloads is actually the most recently *completed* day's download
+	// delta, not the current day's — GitHub's API only reports a cumulative
+	// total, never a per-day delta, so a same-day figure can never exist; see
+	// AsOfDate for the day it actually represents.
+	TodayDownloads int64    `json:"todayDownloads"`
+	TodayDeltaPct  *float64 `json:"todayDeltaPct"`
+	// AsOfDate is the calendar day TodayDownloads (and each TopProduct's
+	// TodayDownloads) actually represents — computed as the latest snapshot's
+	// date minus one day, since the snapshot itself (stamped with the sync's run
+	// date) only captures the state as of the end of the PREVIOUS day. One day
+	// behind the current date is therefore the expected, healthy value; more than
+	// one day behind means the sync cron hasn't run/succeeded recently.
+	AsOfDate       *string      `json:"asOfDate"`
+	MonthDownloads int64        `json:"monthDownloads"`
+	LastSyncDate   *string      `json:"lastSyncDate"`
+	LastSyncStatus *string      `json:"lastSyncStatus"`
+	TopProducts    []TopProduct `json:"topProducts"`
 }
 
 // TopProduct is a ranked repository row for the Overview "top products" table.
@@ -153,16 +169,31 @@ type CompareItem struct {
 	ClonesInRange    int    `json:"clonesInRange"`
 }
 
-// SyncJobLog is a row from sync_job_logs.
+// JobLogSource identifies which job produced a JobLog row.
+type JobLogSource string
+
+const (
+	// JobLogSourceDBSync is a row from sync_job_logs (the Ballerina daily sync).
+	JobLogSourceDBSync JobLogSource = "DB_SYNC"
+	// JobLogSourcePackageScrape is a row from package_scrape_job_logs
+	// (gh-package-stats-scraper).
+	JobLogSourcePackageScrape JobLogSource = "PACKAGE_SCRAPE"
+)
+
+// SyncJobLog is a row from either sync_job_logs or package_scrape_job_logs —
+// both share the same shape, so ListSyncLogs merges them into one
+// chronological history, distinguished by Source. IDs are only unique within
+// a source, never across the two.
 type SyncJobLog struct {
-	ID           int64   `json:"id"`
-	Status       string  `json:"status"`
-	ReposSynced  int     `json:"reposSynced"`
-	ReposFailed  int     `json:"reposFailed"`
-	ErrorMessage *string `json:"errorMessage"`
-	StartedAt    string  `json:"startedAt"`
-	CompletedAt  *string `json:"completedAt"`
-	CreatedAt    string  `json:"createdAt"`
+	ID           int64        `json:"id"`
+	Source       JobLogSource `json:"source"`
+	Status       string       `json:"status"`
+	ReposSynced  int          `json:"reposSynced"`
+	ReposFailed  int          `json:"reposFailed"`
+	ErrorMessage *string      `json:"errorMessage"`
+	StartedAt    string       `json:"startedAt"`
+	CompletedAt  *string      `json:"completedAt"`
+	CreatedAt    string       `json:"createdAt"`
 }
 
 // NewRepository is the payload to create a tracked repository.
@@ -172,6 +203,7 @@ type NewRepository struct {
 	ProductName   *string  `json:"productName"`
 	AssetPrefixes []string `json:"assetPrefixes"`
 	IsActive      *bool    `json:"isActive"`
+	TrackPackages *bool    `json:"trackPackages"`
 }
 
 // RepositoryUpdate is the payload to update a tracked repository. Nil fields are
@@ -180,4 +212,5 @@ type RepositoryUpdate struct {
 	ProductName   *string   `json:"productName"`
 	AssetPrefixes *[]string `json:"assetPrefixes"`
 	IsActive      *bool     `json:"isActive"`
+	TrackPackages *bool     `json:"trackPackages"`
 }

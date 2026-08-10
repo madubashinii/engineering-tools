@@ -49,6 +49,22 @@ public isolated function completeSyncJob(int jobId, SyncJobStatus status, int re
     _ = check databaseClient->execute(completeSyncJobQuery(jobId, status, reposSynced, reposFailed, errorMessage));
 }
 
+# Backfill clone stats onto an EXISTING repository snapshot row. Used to
+# self-heal rows written before GitHub had published that day's clone-traffic
+# bucket (the traffic API lags the UTC midnight rollover by several hours, so
+# a sync running shortly after midnight finds no bucket for the just-ended day
+# and stores 0). UPDATE only — a date with no snapshot row is a no-op.
+#
+# + trackedRepoId - `tracked_repositories.id`
+# + snapshotDate - The snapshot row's date ("YYYY-MM-DD") to update
+# + cloneCount - Clone count for the row's activity day
+# + cloneUniques - Unique cloners for the row's activity day
+# + return - An error if the update fails
+public isolated function updateCloneStats(int trackedRepoId, string snapshotDate, int cloneCount,
+        int cloneUniques) returns error? {
+    _ = check databaseClient->execute(updateCloneStatsQuery(trackedRepoId, snapshotDate, cloneCount, cloneUniques));
+}
+
 # Upsert a single repository's daily snapshot (repo row + all asset rows) in one transaction.
 # Idempotent for the same day via ON DUPLICATE KEY UPDATE on the `snapshot_date` unique keys.
 #

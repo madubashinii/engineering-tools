@@ -27,23 +27,16 @@ export interface IdTokenClaims {
   // put the avatar URL in `profile` instead — read both.
   profile?: string;
   picture?: string;
-  groups?: string[];
-  org_name?: string;
-  org_handle?: string;
-  org_id?: string;
 }
 
 export interface ResolvedUserInfo {
   fullName: string;
   email: string;
   avatarUrl?: string;
-  orgName?: string;
-  orgHandle?: string;
-  groups: string[];
 }
 
-// Maps raw ID token claims to the display fields used by the header/profile,
-// degrading gracefully when optional claims (name, picture, org) are absent.
+// Maps raw ID token claims to the display fields used by the header profile
+// menu, degrading gracefully when optional claims (name, picture) are absent.
 export function resolveUserInfo(user: unknown): ResolvedUserInfo {
   const c = (user ?? {}) as IdTokenClaims;
   const fullName =
@@ -58,16 +51,5 @@ export function resolveUserInfo(user: unknown): ResolvedUserInfo {
     fullName,
     email: c.email ?? "",
     avatarUrl: c.picture || c.profile,
-    orgName: c.org_name,
-    orgHandle: c.org_handle,
-    groups: Array.isArray(c.groups) ? c.groups : [],
   };
-}
-
-// Initials fallback for the avatar when no picture is available.
-export function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }

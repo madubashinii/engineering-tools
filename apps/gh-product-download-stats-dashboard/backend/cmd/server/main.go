@@ -66,6 +66,7 @@ func run() int {
 
 	repositoryHandler := handler.NewRepositoryHandler(st)
 	statsHandler := handler.NewStatsHandler(st)
+	packagesHandler := handler.NewPackagesHandler(st)
 	adminHandler := handler.NewAdminHandler(st, splitComma(os.Getenv("ADMIN_GROUPS")))
 
 	authCfg := middleware.Config{
@@ -81,6 +82,7 @@ func run() int {
 		w.WriteHeader(http.StatusOK)
 	})
 
+	mux.HandleFunc("GET /api/v1/user-info", adminHandler.UserInfo)
 	mux.HandleFunc("GET /api/v1/repositories", repositoryHandler.ListRepositories)
 	mux.HandleFunc("GET /api/v1/stats/summary", statsHandler.GetSummary)
 	mux.HandleFunc("GET /api/v1/stats/total", statsHandler.GetTotal)
@@ -91,6 +93,11 @@ func run() int {
 	mux.HandleFunc("GET /api/v1/stats/versions/{repoId}/series", statsHandler.GetVersionSeries)
 	mux.HandleFunc("GET /api/v1/stats/assets/{repoId}", statsHandler.GetAssets)
 	mux.HandleFunc("GET /api/v1/stats/compare", statsHandler.GetCompare)
+
+	mux.HandleFunc("GET /api/v1/stats/packages/repos", packagesHandler.GetPackageRepos)
+	mux.HandleFunc("GET /api/v1/stats/packages/{repoId}", packagesHandler.GetPackageBreakdown)
+	mux.HandleFunc("GET /api/v1/stats/packages/{repoId}/series", packagesHandler.GetPackageSeries)
+	mux.HandleFunc("GET /api/v1/stats/packages/{repoId}/versions", packagesHandler.GetPackageVersions)
 
 	mux.HandleFunc("GET /api/v1/admin/repositories", adminHandler.ListRepositories)
 	mux.HandleFunc("POST /api/v1/admin/repositories", adminHandler.CreateRepository)
