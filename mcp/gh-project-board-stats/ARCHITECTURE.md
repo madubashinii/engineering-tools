@@ -29,7 +29,7 @@ flowchart TB
     class novera,claude,github,mysql ext
 ```
 
-There is no human actor at this level. The caller is a software system, not a person, and this service only ever sees the question text and a verified JWT, nothing about the chat session or the end user behind it. Every downstream call (MySQL scoping, GitHub reads) is keyed off the identity extracted from that JWT, never off anything Claude returns.
+There is no human actor at this level. The caller is a software system, not a person, and this service only ever sees the question text and a verified JWT, nothing about the chat session or the end user behind it. MySQL user, session, and preference rows are scoped by the identity extracted from that JWT. GitHub reads use the deployment-scoped GITHUB_OWNER and shared GitHub token.
 
 ## Container & Deployment Diagram (C4 Level 2)
 

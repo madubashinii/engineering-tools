@@ -101,10 +101,9 @@ DB_USER
 DB_PASSWORD
 DB_NAME
 RUN_MIGRATIONS=true
-AUTH_ISSUER=choreo|asgardeo
+AUTH_ISSUER=choreo
 CHOREO_JWKS_URI
 ASGARDEO_JWKS_URI
-MCP_SERVER_PATH=/usr/local/bin/github-mcp-server
 ```
 
 `GITHUB_PERSONAL_ACCESS_TOKEN` (or `GITHUB_TOKEN` as a fallback) is required at startup — the service fails to boot without one, since it's passed to the local GitHub MCP subprocess for all board/item reads.
